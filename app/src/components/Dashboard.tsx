@@ -369,7 +369,7 @@ export function Dashboard({ onLogout, onAddAccount }: { onLogout: () => void, on
 
     return (
         <div
-            className="flex h-screen w-full overflow-hidden bg-telegram-bg relative"
+            className="flex flex-col md:flex-row h-screen w-full overflow-hidden bg-telegram-bg relative"
             onClick={() => setSelectedIds([])}
             onDragOver={handleRootDragOver}
             onDragEnter={handleRootDragEnter}

@@ -76,7 +76,7 @@ export function Sidebar({
     }
 
     return (
-        <aside className="w-64 bg-telegram-surface border-r border-telegram-border flex flex-col" onClick={e => e.stopPropagation()}>
+        <aside className="w-full h-auto max-h-64 md:w-64 md:h-full md:max-h-none bg-telegram-surface border-r border-b md:border-b-0 border-telegram-border flex flex-col overflow-y-auto md:overflow-hidden shrink-0" onClick={e => e.stopPropagation()}>
             <div className="p-4 flex items-center justify-between border-b border-telegram-border">
                 <div className="flex items-center gap-2">
                     <img src="/logo.png" className="w-8 h-8 drop-shadow-lg" alt="Logo" />
