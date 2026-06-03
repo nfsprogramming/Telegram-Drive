@@ -37,6 +37,7 @@ export function Dashboard({ onLogout, onAddAccount }: { onLogout: () => void, on
     } = useTelegramConnection(onLogout);
 
     const { confirm } = useConfirm();
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
     const handleRemoveAccount = async (accountId: string) => {
         if (!await confirm({ title: "Remove Account", message: "Are you sure you want to remove this account? This will log you out if it is currently active.", confirmText: "Remove", variant: 'danger' })) return;
@@ -431,6 +432,8 @@ export function Dashboard({ onLogout, onAddAccount }: { onLogout: () => void, on
                 onSwitchAccount={handleSwitchAccount}
                 onAddAccount={onAddAccount}
                 onRemoveAccount={handleRemoveAccount}
+                isOpen={isSidebarOpen}
+                onClose={() => setIsSidebarOpen(false)}
             />
 
             <main className="flex-1 flex flex-col" onClick={(e) => { if (e.target === e.currentTarget) setSelectedIds([]); }}>
@@ -445,6 +448,7 @@ export function Dashboard({ onLogout, onAddAccount }: { onLogout: () => void, on
                     setViewMode={setViewMode}
                     searchTerm={searchTerm}
                     onSearchChange={setSearchTerm}
+                    onToggleSidebar={() => setIsSidebarOpen(v => !v)}
                 />
                 {searchTerm.length > 2 && (
                     <div className="px-6 pt-4 pb-0">

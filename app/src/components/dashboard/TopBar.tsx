@@ -1,4 +1,4 @@
-import { HardDrive, LayoutGrid, Sun, Moon } from 'lucide-react';
+import { HardDrive, LayoutGrid, Sun, Moon, Menu } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 
 interface TopBarProps {
@@ -12,21 +12,25 @@ interface TopBarProps {
     setViewMode: (mode: 'grid' | 'list') => void;
     searchTerm: string;
     onSearchChange: (term: string) => void;
+    onToggleSidebar: () => void;
 }
 
 export function TopBar({
     currentFolderName, selectedIds, onShowMoveModal, onBulkDownload, onBulkDelete,
-    onDownloadFolder, viewMode, setViewMode, searchTerm, onSearchChange
+    onDownloadFolder, viewMode, setViewMode, searchTerm, onSearchChange, onToggleSidebar
 }: TopBarProps) {
     const { theme, toggleTheme } = useTheme();
 
     return (
         <header className="h-14 border-b border-telegram-border flex items-center px-4 justify-between bg-telegram-surface/80 backdrop-blur-md sticky top-0 z-10" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 md:gap-4">
+                <button onClick={onToggleSidebar} className="p-2 -ml-2 hover:bg-telegram-hover rounded-md text-telegram-subtext hover:text-telegram-text transition md:hidden">
+                    <Menu className="w-5 h-5" />
+                </button>
                 <div className="flex items-center text-sm breadcrumbs text-telegram-subtext select-none">
-                    <span className="hover:text-telegram-text cursor-pointer transition-colors">Start</span>
-                    <span className="mx-2">/</span>
-                    <span className="text-telegram-text font-medium">{currentFolderName}</span>
+                    <span className="hover:text-telegram-text cursor-pointer transition-colors hidden sm:inline">Start</span>
+                    <span className="mx-2 hidden sm:inline">/</span>
+                    <span className="text-telegram-text font-medium truncate max-w-[120px] sm:max-w-none">{currentFolderName}</span>
                 </div>
             </div>
 

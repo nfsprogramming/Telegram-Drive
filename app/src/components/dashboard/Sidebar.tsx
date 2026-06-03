@@ -26,12 +26,15 @@ interface SidebarProps {
     onSwitchAccount: (id: string) => void;
     onAddAccount: () => void;
     onRemoveAccount: (id: string) => void;
+    isOpen: boolean;
+    onClose: () => void;
 }
 
 export function Sidebar({
     folders, activeFolderId, setActiveFolderId, onDrop, onDelete, onCreate,
     isSyncing, isConnected, onSync, onLogout, bandwidth,
-    accounts, activeAccountId, onSwitchAccount, onAddAccount, onRemoveAccount
+    accounts, activeAccountId, onSwitchAccount, onAddAccount, onRemoveAccount,
+    isOpen, onClose
 }: SidebarProps) {
     const [showNewFolderInput, setShowNewFolderInput] = useState(false);
     const [newFolderName, setNewFolderName] = useState('');
@@ -76,8 +79,21 @@ export function Sidebar({
     }
 
     return (
-        <aside className="w-full h-auto max-h-64 md:w-64 md:h-full md:max-h-none bg-telegram-surface border-r border-b md:border-b-0 border-telegram-border flex flex-col overflow-y-auto md:overflow-hidden shrink-0" onClick={e => e.stopPropagation()}>
-            <div className="p-4 flex items-center justify-between border-b border-telegram-border">
+        <>
+            {/* Mobile Overlay */}
+            {isOpen && (
+                <div 
+                    className="fixed inset-0 bg-black/50 z-40 md:hidden transition-opacity"
+                    onClick={onClose}
+                />
+            )}
+            
+            <aside className={`
+                fixed inset-y-0 left-0 z-50 w-72 bg-telegram-surface border-r border-telegram-border flex flex-col shrink-0
+                transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0
+                ${isOpen ? 'translate-x-0' : '-translate-x-full'}
+            `} onClick={e => e.stopPropagation()}>
+                <div className="p-4 flex items-center justify-between border-b border-telegram-border">
                 <div className="flex items-center gap-2">
                     <img src="/logo.png" className="w-8 h-8 drop-shadow-lg" alt="Logo" />
                     <span className="font-bold text-lg text-telegram-text tracking-tight">Telegram Drive</span>
@@ -249,5 +265,6 @@ export function Sidebar({
             </div>
 
         </aside>
-    )
+        </>
+    );
 }

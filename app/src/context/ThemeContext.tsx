@@ -15,11 +15,8 @@ function getInitialTheme(): Theme {
     if (typeof window !== 'undefined') {
         const saved = localStorage.getItem('theme') as Theme;
         if (saved === 'light' || saved === 'dark') return saved;
-        if (window.matchMedia('(prefers-color-scheme: light)').matches) {
-            return 'light';
-        }
     }
-    return 'dark';
+    return 'dark'; // Always default to Cyber Red dark mode
 }
 
 // Apply theme to DOM immediately
