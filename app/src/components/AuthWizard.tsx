@@ -51,7 +51,7 @@ export function AuthWizard({ onLogin, isAddingAccount, onCancelAdd }: { onLogin:
 
     const [apiId, setApiId] = useState("");
     const [apiHash, setApiHash] = useState("");
-    const [sessionName, setSessionName] = useState(() => Date.now().toString());
+    const [sessionName] = useState(() => Date.now().toString());
 
     const [phone, setPhone] = useState("");
     const [code, setCode] = useState("");

@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { HardDrive, Folder, Plus, RefreshCw, LogOut } from 'lucide-react';
-import { DropZone } from '../DropZone';
-import { useBandwidth } from '../../hooks/useBandwidth';
+
 import { SidebarItem } from './SidebarItem';
 import { BandwidthWidget } from './BandwidthWidget';
 import { invoke } from '@tauri-apps/api/core';

@@ -1,65 +1,75 @@
-# Telegram Drive 
+<div align="center">
+  <img src="app/src-tauri/icons/128x128@2x.png" alt="Telegram Drive Logo" width="200" />
 
-**Telegram Drive** is an open-source, cross-platform desktop application that turns your Telegram account into an unlimited, secure cloud storage drive. Built with **Tauri**, **Rust**, and **React**.
+  <br />
+  <br />
 
-![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
-![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20MacOS%20%7C%20Linux-blue)
+  <h1 align="center">Telegram Drive</h1>
+  <p align="center">
+    <strong>Unlimited Storage. Reinvented.</strong>
+    <br />
+    The premium, open-source cloud storage platform powered by Telegram's infinite infrastructure.
+  </p>
 
+  <p align="center">
+    <a href="https://github.com/nfsprogramming/Telegram-Drive/releases"><img src="https://img.shields.io/github/v/release/nfsprogramming/Telegram-Drive?style=for-the-badge&color=C62524" alt="Release" /></a>
+    <a href="https://github.com/nfsprogramming/Telegram-Drive/stargazers"><img src="https://img.shields.io/github/stars/nfsprogramming/Telegram-Drive?style=for-the-badge&color=C62524" alt="Stars" /></a>
+    <a href="https://github.com/nfsprogramming/Telegram-Drive/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="License" /></a>
+    <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-4caf50.svg?style=for-the-badge" alt="Platform" />
+    <img src="https://img.shields.io/badge/Built_with-Rust%20%7C%20Tauri-e5732c.svg?style=for-the-badge" alt="Tech" />
+  </p>
 
+  <h3>
+    <a href="#installation">📥 Download</a>
+    <span> | </span>
+    <a href="#features">✨ Features</a>
+    <span> | </span>
+    <a href="#tech-stack">🏗 Architecture</a>
+  </h3>
+</div>
 
+<br />
 
-##  What is Telegram Drive?
+## 🌟 What is Telegram Drive?
 
-Telegram Drive leverages the Telegram API to allow you to upload, organize, and manage files directly on Telegram's servers. It treats your "Saved Messages" and created Channels as folders, giving you a familiar file explorer interface for your Telegram cloud.
+**Telegram Drive** is an open-source, cross-platform desktop application that leverages the Telegram API to give you an unlimited, secure cloud storage drive. It transforms your "Saved Messages" and private channels into a familiar, high-performance virtual filesystem.
 
-###  Key Features
+Stop paying for Google Drive and Dropbox. Own your cloud.
 
-*   **Unlimited Cloud Storage**: Utilizing Telegram's generous cloud infrastructure.
-*   **High Performance Grid**: Virtual scrolling handles folders with thousands of files instantly.
-*   **Auto-Updates**: Seamless updates for Windows, macOS, and Linux.
-*   **Media Streaming**: Stream video and audio files directly without downloading.
-*   **PDF Viewer:** Built-in PDF support with infinite scrolling for seamless document reading.
-*   **Drag & Drop**: Intuitive drag-and-drop upload and file management.
-*   **Thumbnail Previews**: Inline thumbnails for images and media files.
-*   **Folder Management**: Create "Folders" (private Telegram Channels) to organize content.
-*   **Privacy Focused**: API keys and data stay local. No third-party servers.
-*   **Cross-Platform**: Native apps for macOS (Intel/ARM), Windows, and Linux.
+## ✨ Features
 
+*   **♾️ Unlimited Cloud Storage**: Utilizing Telegram's unthrottled global CDN infrastructure.
+*   **🔒 Zero-Knowledge Architecture**: API keys and data stay local. No third-party servers.
+*   **🎨 Premium Glassmorphism UI**: Beautiful AMOLED Neon Red theme with native OS integration.
+*   **⚡ High Performance Grid**: Virtual scrolling handles folders with thousands of files instantly.
+*   **🗂️ Folder Management**: Create "Folders" (private Telegram Channels) to organize content natively.
+*   **▶️ Media Streaming**: Stream video and audio files directly without downloading them first.
+*   **📄 PDF Viewer:** Built-in PDF support with infinite scrolling for seamless document reading.
+*   **🖱️ Drag & Drop**: Intuitive drag-and-drop upload and file management.
 
-
-##  Tech Stack
+## 🏗 Tech Stack
 
 *   **Frontend**: React, TypeScript, TailwindCSS, Framer Motion
 *   **Backend**: Rust (Tauri), Grammers (Telegram Client)
 *   **Build Tool**: Vite
 
-
-##  Getting Started
+## 📥 Installation & Getting Started
 
 ### Prerequisites
 
 *   **Node.js (v18+)**: [Download here](https://nodejs.org/)
 *   **Rust (latest stable)**: Required to compile the Tauri backend. Install via [rustup](https://rustup.rs/):
-    *   **macOS/Linux:** `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
     *   **Windows:** Download and run `rustup-init.exe` from [rustup.rs](https://rustup.rs/)
-    *   *Verify installation:* run `rustc --version` and `cargo --version` in your terminal.
 *   **OS-Specific Build Tools for Tauri**: 
-    *   **macOS:** Xcode Command Line Tools (`xcode-select --install`).
-    *   **Linux (Ubuntu/Debian):** `sudo apt update && sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev`
-    *   **Windows (CRITICAL):** You **must** install the [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/). During installation, select the **"Desktop development with C++"** workload. Without this, you will get a `linker 'link.exe' not found` error.
-    *   **Windows (WebView2):** Windows 10/11 users usually have this pre-installed. If not, download the [WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/#download-section).
-    *   *Reference:* See the official [Tauri v2 Prerequisites Guide](https://v2.tauri.app/start/prerequisites/) for detailed instructions.
-*   **Telegram API Credentials**: You need your own API ID and API Hash to communicate with Telegram's servers.
+    *   **Windows (CRITICAL):** You **must** install the [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/). During installation, select the **"Desktop development with C++"** workload.
+*   **Telegram API Credentials**: You need your own API ID and API Hash to communicate with Telegram's servers securely.
     1. Log into [my.telegram.org](https://my.telegram.org).
     2. Go to "API development tools" and create a new application to get your `api_id` and `api_hash`.
 
 > [!NOTE]  
 > **First-run Compile Time:** The initial build (`npm run tauri dev` or `npm run tauri build`) will download and compile over 300 Rust crates. This process can take **5 to 15 minutes** depending on your hardware. Subsequent builds will be much faster.
 
-> [!TIP]
-> **NPM Vulnerabilities:** You may see vulnerability warnings during `npm install`. These are usually related to build tools and dev dependencies. You can optionally run `npm audit fix`, but it is not strictly required to run the app.
-
-### Installation
+### Building from Source
 
 1.  **Clone the repository**
     ```bash
@@ -78,14 +88,14 @@ Telegram Drive leverages the Telegram API to allow you to upload, organize, and 
     npm run tauri dev
     ```
 
-4.  **Build/Compile**
+4.  **Compile to .exe / .dmg**
     ```bash
     npm run tauri build
     ```
 
-##  Open Source & License
+## 🤝 Open Source & License
 
-This project is **Free and Open Source Software**. You are free to use, modify, and distribute it.
+This project is **Free and Open Source Software** proudly created and maintained by **NFS Programming**. You are free to use, modify, and distribute it.
 
 Licensed under the **MIT License**.
 

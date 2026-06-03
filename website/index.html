@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Telegram Drive | Unlimited Cloud Storage</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        cyber: {
+                            black: '#040202',
+                            surface: '#0c0606',
+                            red: '#C62524',
+                            darkred: '#A62120',
+                            maroon: '#501413',
+                            text: '#F7F7F6',
+                            subtext: '#A49D9B',
+                            glow: '#E87067'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            background-color: #040202;
+            color: #F7F7F6;
+            font-family: 'Inter', sans-serif;
+        }
+        .glass-panel {
+            background: rgba(12, 6, 6, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid #501413;
+        }
+        .text-gradient {
+            background: linear-gradient(135deg, #F7F7F6 0%, #E87067 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .hero-glow {
+            position: absolute;
+            top: 20%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(198, 37, 36, 0.15) 0%, rgba(4, 2, 2, 0) 70%);
+            z-index: -1;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body class="antialiased min-h-screen relative overflow-x-hidden">
+
+    <!-- Ambient Glow Background -->
+    <div class="hero-glow"></div>
+
+    <!-- Navigation -->
+    <nav class="fixed w-full z-50 glass-panel border-b-0 border-cyber-maroon/50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-20">
+                <div class="flex items-center gap-3">
+                    <!-- Placeholder for Logo -->
+                    <div class="w-10 h-10 bg-cyber-red rounded-lg flex items-center justify-center shadow-[0_0_15px_rgba(198,37,36,0.5)]">
+                        <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+                    </div>
+                    <span class="font-bold text-xl tracking-tight">Telegram Drive</span>
+                </div>
+                <div class="hidden md:flex space-x-8">
+                    <a href="#features" class="text-cyber-subtext hover:text-white transition-colors">Features</a>
+                    <a href="#security" class="text-cyber-subtext hover:text-white transition-colors">Security</a>
+                    <a href="https://github.com/nfsprogramming/Telegram-Drive" class="text-cyber-subtext hover:text-white transition-colors">GitHub</a>
+                </div>
+                <div>
+                    <a href="https://github.com/nfsprogramming/Telegram-Drive/releases" class="bg-cyber-red hover:bg-cyber-darkred text-white px-6 py-2.5 rounded-full font-medium transition-all shadow-[0_0_20px_rgba(198,37,36,0.3)] hover:shadow-[0_0_25px_rgba(198,37,36,0.5)]">
+                        Download Now
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <main class="pt-32 pb-20 sm:pt-40 sm:pb-24 lg:pb-32 px-4 relative z-10">
+        <div class="max-w-7xl mx-auto text-center">
+            <h1 class="text-5xl sm:text-7xl font-extrabold tracking-tight mb-8">
+                Your Telegram.<br />
+                <span class="text-gradient">Your Infinite Cloud.</span>
+            </h1>
+            <p class="mt-6 max-w-2xl mx-auto text-xl text-cyber-subtext leading-relaxed">
+                Stop paying for cloud storage. Telegram Drive mounts Telegram's infinite infrastructure directly into your OS. Secure, open-source, and absolutely unthrottled.
+            </p>
+            <div class="mt-10 flex flex-col sm:flex-row justify-center gap-4">
+                <a href="https://github.com/nfsprogramming/Telegram-Drive/releases" class="bg-cyber-red text-white px-8 py-4 rounded-full font-semibold text-lg transition-all hover:scale-105 shadow-[0_0_30px_rgba(198,37,36,0.4)] flex items-center justify-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    Download for Windows
+                </a>
+                <a href="https://github.com/nfsprogramming/Telegram-Drive" class="glass-panel text-white px-8 py-4 rounded-full font-semibold text-lg hover:bg-cyber-surface transition-all flex items-center justify-center gap-2">
+                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+                    View Source
+                </a>
+            </div>
+            
+            <!-- Dashboard Preview Placeholder -->
+            <div class="mt-20 relative max-w-5xl mx-auto">
+                <div class="absolute inset-0 bg-cyber-red blur-[100px] opacity-20 rounded-full"></div>
+                <div class="relative rounded-2xl glass-panel p-2 border border-cyber-maroon shadow-2xl">
+                    <div class="bg-cyber-surface rounded-xl overflow-hidden aspect-video flex items-center justify-center border border-cyber-maroon/50">
+                        <p class="text-cyber-subtext text-lg">App Dashboard Screenshot Goes Here</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Features Section -->
+    <section id="features" class="py-24 bg-cyber-surface/30 relative">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl sm:text-4xl font-bold tracking-tight mb-4">Enterprise Storage.<br/>Zero Subscriptions.</h2>
+                <p class="text-cyber-subtext max-w-2xl mx-auto text-lg">Why rent space when you can own the cloud? We've built an enterprise-grade filesystem on top of the world's most robust messaging network.</p>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                <!-- Feature 1 -->
+                <div class="glass-panel p-8 rounded-2xl hover:-translate-y-2 transition-transform duration-300">
+                    <div class="w-12 h-12 bg-cyber-red/20 rounded-xl flex items-center justify-center mb-6 text-cyber-red">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-3">Infinite Capacity</h3>
+                    <p class="text-cyber-subtext leading-relaxed">Say goodbye to "Storage Full" warnings. Leverage Telegram's unthrottled cloud capacity with zero artificial limits.</p>
+                </div>
+                
+                <!-- Feature 2 -->
+                <div class="glass-panel p-8 rounded-2xl hover:-translate-y-2 transition-transform duration-300">
+                    <div class="w-12 h-12 bg-cyber-red/20 rounded-xl flex items-center justify-center mb-6 text-cyber-red">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-3">Zero-Knowledge Vault</h3>
+                    <p class="text-cyber-subtext leading-relaxed">Military-grade client-side encryption ensures only you hold the keys. Nobody, not even us, can see your files.</p>
+                </div>
+
+                <!-- Feature 3 -->
+                <div class="glass-panel p-8 rounded-2xl hover:-translate-y-2 transition-transform duration-300">
+                    <div class="w-12 h-12 bg-cyber-red/20 rounded-xl flex items-center justify-center mb-6 text-cyber-red">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-3">Native Drive Mounting</h3>
+                    <p class="text-cyber-subtext leading-relaxed">Access your secure cloud files directly from Windows Explorer or macOS Finder, just like a physical hard drive.</p>
+                </div>
+
+                <!-- Feature 4 -->
+                <div class="glass-panel p-8 rounded-2xl hover:-translate-y-2 transition-transform duration-300">
+                    <div class="w-12 h-12 bg-cyber-red/20 rounded-xl flex items-center justify-center mb-6 text-cyber-red">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-3">Blazing Fast</h3>
+                    <p class="text-cyber-subtext leading-relaxed">Engineered in pure Rust. We hook directly into Telegram's distributed global CDN for maximum upload and download speeds.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer CTA -->
+    <section class="py-24 relative overflow-hidden">
+        <div class="absolute inset-0 bg-cyber-red/5"></div>
+        <div class="max-w-4xl mx-auto px-4 relative z-10 text-center">
+            <h2 class="text-3xl sm:text-4xl font-bold mb-6">Take Back Your Data.</h2>
+            <p class="text-xl text-cyber-subtext mb-10">Join thousands of users who have already migrated to the most secure, unlimited open-source cloud storage platform available.</p>
+            <a href="https://github.com/nfsprogramming/Telegram-Drive/releases" class="inline-block bg-white text-cyber-black px-10 py-4 rounded-full font-bold text-lg transition-transform hover:scale-105 shadow-[0_0_20px_rgba(255,255,255,0.2)]">
+                Get Started for Free
+            </a>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="border-t border-cyber-maroon/50 py-12">
+        <div class="max-w-7xl mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-2">
+                <div class="w-6 h-6 bg-cyber-red rounded flex items-center justify-center">
+                    <svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+                </div>
+                <span class="font-bold tracking-tight">Telegram Drive</span>
+            </div>
+            <p class="text-cyber-subtext text-sm">
+                Proudly built and open-sourced by <strong>NFS Programming</strong>.
+            </p>
+        </div>
+    </footer>
+
+</body>
+</html>
