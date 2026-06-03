@@ -90,7 +90,7 @@ export function Sidebar({
             
             <aside className={`
                 fixed inset-y-0 left-0 z-50 w-72 bg-telegram-surface border-r border-telegram-border flex flex-col shrink-0
-                transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0
+                transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 pt-8 md:pt-0
                 ${isOpen ? 'translate-x-0' : '-translate-x-full'}
             `} onClick={e => e.stopPropagation()}>
                 <div className="p-4 flex items-center justify-between border-b border-telegram-border">

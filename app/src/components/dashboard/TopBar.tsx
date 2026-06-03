@@ -22,7 +22,7 @@ export function TopBar({
     const { theme, toggleTheme } = useTheme();
 
     return (
-        <header className="h-14 border-b border-telegram-border flex items-center px-4 justify-between bg-telegram-surface/80 backdrop-blur-md sticky top-0 z-10" onClick={e => e.stopPropagation()}>
+        <header className="h-[88px] pt-8 md:pt-0 md:h-14 border-b border-telegram-border flex items-center px-4 justify-between bg-telegram-surface/80 backdrop-blur-md sticky top-0 z-10" onClick={e => e.stopPropagation()}>
             <div className="flex items-center gap-2 md:gap-4">
                 <button onClick={onToggleSidebar} className="p-2 -ml-2 hover:bg-telegram-hover rounded-md text-telegram-subtext hover:text-telegram-text transition md:hidden">
                     <Menu className="w-5 h-5" />

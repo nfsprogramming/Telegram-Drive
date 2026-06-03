@@ -38,7 +38,7 @@ function useGridColumns(containerRef: React.RefObject<HTMLDivElement | null>) {
         if (!containerRef.current) return;
 
         const updateColumns = () => {
-            const width = containerRef.current?.clientWidth || 800;
+            const width = containerRef.current?.clientWidth || window.innerWidth;
             setContainerWidth(width);
             if (width < 640) setColumns(2);
             else if (width < 768) setColumns(3);
@@ -69,8 +69,8 @@ export function FileExplorer({
 
     const GAP = 6;
     const cardWidth = (containerWidth - (GAP * (columns - 1))) / columns;
-    const cardHeight = cardWidth * 0.75; // aspect-[4/3]
-    const rowHeight = Math.max(cardHeight + GAP, 150);
+    const cardHeight = cardWidth * 0.75;
+    const rowHeight = cardHeight + GAP;
 
     const handleContextMenu = useCallback((e: React.MouseEvent, file: TelegramFile) => {
         e.preventDefault();
