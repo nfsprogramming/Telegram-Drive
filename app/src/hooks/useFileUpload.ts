@@ -78,7 +78,7 @@ export function useFileUpload(activeFolderId: number | null, store: Store | null
                 cancelledRef.current.delete(item.id);
             } else {
                 setUploadQueue(q => q.map(i => i.id === item.id ? { ...i, status: 'success', progress: 100 } : i));
-                queryClient.invalidateQueries({ queryKey: ['files', item.folderId] });
+                queryClient.invalidateQueries({ queryKey: ['files'] });
             }
         } catch (e) {
             if (!cancelledRef.current.has(item.id)) {

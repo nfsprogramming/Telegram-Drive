@@ -125,10 +125,30 @@ struct ProgressReader {
 }
 
 impl ProgressReader {
-    async fn new(path: &str) -> Result<(Self, u64, std::sync::Arc<std::sync::atomic::AtomicU64>), String> {
-        let file = tokio::fs::File::open(path).await.map_err(|e| e.to_string())?;
-        let metadata = file.metadata().await.map_err(|e| e.to_string())?;
-        let size = metadata.len();
+    async fn new(path: &str, app_handle: &tauri::AppHandle) -> Result<(Self, u64, std::sync::Arc<std::sync::atomic::AtomicU64>), String> {
+        #[cfg(target_os = "android")]
+        let (file, size) = {
+            if path.starts_with("content://") {
+                use tauri_plugin_android_fs::{AndroidFsExt, FileAccessMode, FileUri};
+                let api = app_handle.android_fs();
+                let file_uri = FileUri::from_uri(path);
+                let std_file = api.open_file(&file_uri, FileAccessMode::Read).map_err(|e| e.to_string())?;
+                let size = std_file.metadata().map_err(|e| e.to_string())?.len();
+                (tokio::fs::File::from_std(std_file), size)
+            } else {
+                let file = tokio::fs::File::open(path).await.map_err(|e| e.to_string())?;
+                let size = file.metadata().await.map_err(|e| e.to_string())?.len();
+                (file, size)
+            }
+        };
+
+        #[cfg(not(target_os = "android"))]
+        let (file, size) = {
+            let file = tokio::fs::File::open(path).await.map_err(|e| e.to_string())?;
+            let size = file.metadata().await.map_err(|e| e.to_string())?.len();
+            (file, size)
+        };
+
         let counter = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
         let reader = Self {
             inner: tokio::io::BufReader::new(file),
@@ -194,7 +214,24 @@ pub async fn cmd_upload_file(
     state: State<'_, TelegramState>,
     bw_state: State<'_, BandwidthManager>,
 ) -> Result<String, String> {
-    let size = std::fs::metadata(&path).map_err(|e| e.to_string())?.len();
+    let size = {
+        #[cfg(target_os = "android")]
+        {
+            if path.starts_with("content://") {
+                use tauri_plugin_android_fs::{AndroidFsExt, FileAccessMode, FileUri};
+                let api = app_handle.android_fs();
+                let file_uri = FileUri::from_uri(&path);
+                let std_file = api.open_file(&file_uri, FileAccessMode::Read).map_err(|e| e.to_string())?;
+                std_file.metadata().map_err(|e| e.to_string())?.len()
+            } else {
+                std::fs::metadata(&path).map_err(|e| e.to_string())?.len()
+            }
+        }
+        #[cfg(not(target_os = "android"))]
+        {
+            std::fs::metadata(&path).map_err(|e| e.to_string())?.len()
+        }
+    };
     bw_state.can_transfer(size)?;
 
     let tid = transfer_id.unwrap_or_default();
@@ -215,11 +252,29 @@ pub async fn cmd_upload_file(
     }
 
     // Create progress-tracking reader
-    let (mut reader, file_size, bytes_counter) = ProgressReader::new(&path).await?;
-    let file_name = std::path::Path::new(&path)
-        .file_name()
-        .map(|n| n.to_string_lossy().to_string())
-        .unwrap_or_else(|| "file".to_string());
+    let (mut reader, file_size, bytes_counter) = ProgressReader::new(&path, &app_handle).await?;
+    
+    // Attempt to extract real file name from content:// URI or fallback to standard path.
+    let file_name = {
+        #[cfg(target_os = "android")]
+        {
+            if path.starts_with("content://") {
+                use tauri_plugin_android_fs::{AndroidFsExt, FileUri};
+                let api = app_handle.android_fs();
+                // tauri-plugin-android-fs gives us file metadata which might include the real name,
+                // or we can just extract from the string path if available, or just default.
+                // Usually content URIs don't have the real name in the path string. We'll try our best.
+                let file_uri = FileUri::from_uri(&path);
+                api.get_info(&file_uri).ok().map(|info| info.name().to_string()).unwrap_or_else(|| "file".to_string())
+            } else {
+                std::path::Path::new(&path).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "file".to_string())
+            }
+        }
+        #[cfg(not(target_os = "android"))]
+        {
+            std::path::Path::new(&path).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "file".to_string())
+        }
+    };
 
     // Spawn a progress reporter task that emits events every 250ms
     let cancelled = state.cancelled_transfers.clone();
@@ -362,7 +417,23 @@ pub async fn cmd_download_file(
 
     // Stream download with per-chunk progress
     let mut download_iter = client.iter_download(&media);
-    let mut file = std::fs::File::create(&save_path).map_err(|e| e.to_string())?;
+    let mut file = {
+        #[cfg(target_os = "android")]
+        {
+            if save_path.starts_with("content://") {
+                use tauri_plugin_android_fs::{AndroidFsExt, FileAccessMode, FileUri};
+                let api = app_handle.android_fs();
+                let file_uri = FileUri::from_uri(&save_path);
+                api.open_file(&file_uri, FileAccessMode::Write).map_err(|e| e.to_string())?
+            } else {
+                std::fs::File::create(&save_path).map_err(|e| e.to_string())?
+            }
+        }
+        #[cfg(not(target_os = "android"))]
+        {
+            std::fs::File::create(&save_path).map_err(|e| e.to_string())?
+        }
+    };
     let mut downloaded: u64 = 0;
     let mut last_emit_time = std::time::Instant::now();
     let mut last_emit_bytes: u64 = 0;

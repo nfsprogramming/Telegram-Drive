@@ -332,7 +332,7 @@ export function Dashboard({ onLogout, onAddAccount }: { onLogout: () => void, on
                     targetFolderId: targetFolderId
                 });
 
-                queryClient.invalidateQueries({ queryKey: ['files', activeFolderId] });
+                queryClient.invalidateQueries({ queryKey: ['files'] });
 
                 if (selectedIds.includes(fileId)) setSelectedIds([]);
 

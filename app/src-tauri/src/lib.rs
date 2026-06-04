@@ -53,6 +53,11 @@ pub fn run() {
         builder = builder.plugin(tauri_plugin_window_state::Builder::default().build());
     }
 
+    #[cfg(target_os = "android")]
+    {
+        builder = builder.plugin(tauri_plugin_android_fs::init());
+    }
+
     let app = builder.setup(move |app| {
             app.manage(TelegramState {
                 client: Arc::new(Mutex::new(None)),
