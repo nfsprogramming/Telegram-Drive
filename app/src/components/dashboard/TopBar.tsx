@@ -1,4 +1,4 @@
-import { HardDrive, LayoutGrid, Sun, Moon, Menu } from 'lucide-react';
+import { HardDrive, LayoutGrid, Sun, Moon, Menu, Search } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 
 interface TopBarProps {
@@ -27,18 +27,19 @@ export function TopBar({
                 <button onClick={onToggleSidebar} className="p-2 -ml-2 hover:bg-telegram-hover rounded-md text-telegram-subtext hover:text-telegram-text transition md:hidden">
                     <Menu className="w-5 h-5" />
                 </button>
-                <div className="flex items-center text-sm breadcrumbs text-telegram-subtext select-none">
-                    <span className="hover:text-telegram-text cursor-pointer transition-colors hidden sm:inline">Start</span>
-                    <span className="mx-2 hidden sm:inline">/</span>
+                <div className="hidden md:flex items-center text-sm breadcrumbs text-telegram-subtext select-none">
+                    <span className="hover:text-telegram-text cursor-pointer transition-colors">Start</span>
+                    <span className="mx-2">/</span>
                     <span className="text-telegram-text font-medium truncate max-w-[120px] sm:max-w-none">{currentFolderName}</span>
                 </div>
             </div>
 
-            <div className="flex-1 max-w-md mx-4">
+            <div className="flex-1 max-w-md mx-2 md:mx-4 relative">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-telegram-subtext pointer-events-none" />
                 <input
                     type="text"
                     placeholder="Search files..."
-                    className="w-full bg-telegram-hover border border-telegram-border rounded-lg px-3 py-1.5 text-sm text-telegram-text placeholder:text-telegram-subtext focus:outline-none focus:border-telegram-primary/50 transition-colors"
+                    className="w-full bg-telegram-hover border border-telegram-border rounded-lg pl-9 pr-3 py-1.5 text-sm text-telegram-text placeholder:text-telegram-subtext focus:outline-none focus:border-telegram-primary/50 transition-colors"
                     value={searchTerm}
                     onChange={(e) => onSearchChange(e.target.value)}
                 />

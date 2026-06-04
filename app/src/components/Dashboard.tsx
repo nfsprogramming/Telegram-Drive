@@ -371,7 +371,10 @@ export function Dashboard({ onLogout, onAddAccount }: { onLogout: () => void, on
     return (
         <div
             className="flex flex-col md:flex-row h-screen w-full overflow-hidden bg-telegram-bg relative"
-            onClick={() => setSelectedIds([])}
+            onClick={() => {
+                setSelectedIds([]);
+                if (isSidebarOpen) setIsSidebarOpen(false);
+            }}
             onDragOver={handleRootDragOver}
             onDragEnter={handleRootDragEnter}
         >
