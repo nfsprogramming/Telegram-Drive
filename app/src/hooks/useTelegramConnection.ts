@@ -20,6 +20,7 @@ export function useTelegramConnection(onLogoutParent: () => void) {
     const [isSyncing, setIsSyncing] = useState(false);
     const [isConnected, setIsConnected] = useState(true);
     const [isSessionReady, setIsSessionReady] = useState(false);
+    const [unlockedVaults, setUnlockedVaults] = useState<Set<number>>(new Set());
 
 
     const networkIsOnline = useNetworkStatus();
@@ -83,6 +84,8 @@ export function useTelegramConnection(onLogoutParent: () => void) {
                                 setIsConnected(true);
                                 setIsSessionReady(true);
                                 queryClient.invalidateQueries({ queryKey: ['files'] });
+                                // Auto-sync folders silently in the background
+                                setTimeout(() => handleSyncFolders(true), 1000);
                             } catch {
                                 // Retry loop: keep asking until the user succeeds or cancels
                                 let connected = false;
@@ -103,6 +106,8 @@ export function useTelegramConnection(onLogoutParent: () => void) {
                                         setIsSessionReady(true);
                                         queryClient.invalidateQueries({ queryKey: ['files'] });
                                         connected = true;
+                                        // Auto-sync folders silently in the background
+                                        setTimeout(() => handleSyncFolders(true), 1000);
                                     } catch {
                                         // Loop will show the confirm dialog again
                                     }
@@ -178,49 +183,58 @@ export function useTelegramConnection(onLogoutParent: () => void) {
         }
     };
 
-    const handleSyncFolders = async () => {
+    const handleSyncFolders = async (silent: boolean = false) => {
         if (!store) return;
-        setIsSyncing(true);
+        if (!silent) setIsSyncing(true);
         try {
             const foundFolders = await invoke<TelegramFolder[]>('cmd_scan_folders');
-            const merged = [...folders];
-            let added = 0;
-            for (const f of foundFolders) {
-                if (!merged.find(existing => existing.id === f.id)) {
-                    merged.push(f);
-                    added++;
+            const currentActiveId = await store.get<string>('active_account_id');
+            setFolders(prev => {
+                const merged = [...prev];
+                let added = 0;
+                for (const f of foundFolders) {
+                    if (!merged.find(existing => existing.id === f.id)) {
+                        merged.push(f);
+                        added++;
+                    }
                 }
-            }
-            if (added > 0) {
-                setFolders(merged);
-                if (activeAccountId) await store.set(`${activeAccountId}_folders`, merged);
-                await store.save();
-                toast.success(`Scan complete. Found ${added} new folders.`);
-            } else {
-                toast.info("Scan complete. No new folders found.");
-            }
+                if (added > 0) {
+                    if (currentActiveId) {
+                        store.set(`${currentActiveId}_folders`, merged).then(() => store.save());
+                    }
+                    if (!silent) toast.success(`Scan complete. Found ${added} new folders.`);
+                } else {
+                    if (!silent) toast.info("Scan complete. No new folders found.");
+                }
+                return merged;
+            });
         } catch {
-            toast.error("Sync failed");
+            if (!silent) toast.error("Sync failed");
         } finally {
-            setIsSyncing(false);
+            if (!silent) setIsSyncing(false);
         }
     };
-
-    const handleCreateFolder = async (name: string) => {
+    const handleCreateFolder = async (name: string, password?: string) => {
         if (!store) return;
         try {
-            const newFolder = await invoke<TelegramFolder>('cmd_create_folder', { name });
+            const finalName = password ? `🔒 ${name}` : name;
+            const newFolder = await invoke<TelegramFolder>('cmd_create_folder', { name: finalName });
+            
+            if (password) {
+                await invoke('cmd_unlock_vault', { folderId: newFolder.id, password });
+                setUnlockedVaults(prev => new Set(prev).add(newFolder.id));
+            }
+
             const updated = [...folders, newFolder];
             setFolders(updated);
             if (activeAccountId) await store.set(`${activeAccountId}_folders`, updated);
             await store.save();
-            toast.success(`Folder "${name}" created.`);
+            toast.success(`Folder "${finalName}" created.`);
         } catch (e) {
             toast.error("Failed to create folder: " + e);
             throw e;
         }
     };
-
     const handleFolderDelete = async (folderId: number, folderName: string) => {
         if (!await confirm({
             title: "Delete Folder",
@@ -284,6 +298,31 @@ export function useTelegramConnection(onLogoutParent: () => void) {
         window.location.reload();
     };
 
+    const handleUnlockVault = async (folderId: number, password: string): Promise<boolean> => {
+        try {
+            await invoke('cmd_unlock_vault', { folderId, password });
+            setUnlockedVaults(prev => new Set(prev).add(folderId));
+            return true;
+        } catch (e) {
+            toast.error("Failed to unlock vault: " + e);
+            return false;
+        }
+    };
+
+    const handleLockVault = async (folderId: number) => {
+        try {
+            await invoke('cmd_lock_vault', { folderId });
+            setUnlockedVaults(prev => {
+                const s = new Set(prev);
+                s.delete(folderId);
+                return s;
+            });
+            if (activeFolderId === folderId) setActiveFolderId(null);
+        } catch (e) {
+            toast.error("Failed to lock vault: " + e);
+        }
+    };
+
     return {
         store,
         accounts,
@@ -295,6 +334,9 @@ export function useTelegramConnection(onLogoutParent: () => void) {
         isSyncing,
         isConnected,
         isSessionReady,
+        unlockedVaults,
+        handleUnlockVault,
+        handleLockVault,
         handleLogout,
         handleSyncFolders,
         handleCreateFolder,

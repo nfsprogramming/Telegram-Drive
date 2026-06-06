@@ -78,6 +78,52 @@ async fn stream_media(
                                 log::debug!("Stream request: Starting download for msg {} (mime: {}, size: {})", message_id, mime, size);
                                 
                                 // Create chunk-streaming response
+                                let vault_key = if let Some(fid) = folder_id {
+                                    data.vault_keys.read().await.get(&fid).cloned()
+                                } else {
+                                    None
+                                };
+
+                                if let Some(key) = vault_key {
+                                    let (mut tx_raw, rx_raw) = tokio::io::duplex(5 * 1024 * 1024);
+                                    let mut download_iter = client.iter_download(&media);
+                                    let msg_id = message_id;
+                                    tokio::spawn(async move {
+                                        while let Some(chunk) = download_iter.next().await.transpose() {
+                                            if let Ok(bytes) = chunk {
+                                                use tokio::io::AsyncWriteExt;
+                                                if tx_raw.write_all(&bytes).await.is_err() { break; }
+                                            } else { break; }
+                                        }
+                                    });
+                                    let decrypted_rx = crate::crypto::decrypt_stream(rx_raw, key).await;
+                                    let mut reader_stream = tokio_util::io::ReaderStream::new(decrypted_rx);
+                                    
+                                    let stream = async_stream::stream! {
+                                        use futures_util::StreamExt;
+                                        let mut chunk_count = 0;
+                                        while let Some(chunk) = reader_stream.next().await {
+                                            match chunk {
+                                                Ok(bytes) => {
+                                                    chunk_count += 1;
+                                                    yield Ok::<_, actix_web::Error>(web::Bytes::from(bytes))
+                                                },
+                                                Err(e) => {
+                                                    log::error!("Decrypted stream error on msg {}: {}", msg_id, e);
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    };
+                                    
+                                    return HttpResponse::Ok()
+                                        .insert_header(("Content-Type", mime))
+                                        .insert_header(("Accept-Ranges", "bytes"))
+                                        .insert_header(("Cache-Control", "private, max-age=120"))
+                                        .streaming(stream);
+                                }
+
+                                // Normal unencrypted stream
                                 let mut download_iter = client.iter_download(&media);
                                 let stream = async_stream::stream! {
                                     let mut chunk_count = 0;
@@ -148,6 +194,7 @@ pub async fn start_server(state: Arc<TelegramState>, port: u16, token: String) -
             .allowed_origin("tauri://localhost")
             .allowed_origin("http://localhost:1420")
             .allowed_origin("https://tauri.localhost")
+            .allowed_origin("http://tauri.localhost")
             .allow_any_method()
             .allow_any_header();
 

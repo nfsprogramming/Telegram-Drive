@@ -1,7 +1,9 @@
 pub mod models;
 
+mod test_ctx;
 pub mod commands;
 pub mod bandwidth;
+pub mod crypto;
 
 use tauri::Manager;
 use tokio::sync::Mutex;
@@ -41,10 +43,10 @@ pub fn run() {
     let server_handle_for_setup = server_handle.clone();
 
     let mut builder = tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_store::Builder::default().build())
-        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_store::Builder::new().build())
+        .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_process::init());
 
@@ -69,6 +71,7 @@ pub fn run() {
                 runner_count: Arc::new(std::sync::atomic::AtomicU32::new(0)),
                 peer_cache: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
                 cancelled_transfers: Arc::new(tokio::sync::RwLock::new(HashSet::new())),
+                vault_keys: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
             });
             app.manage(bandwidth::BandwidthManager::new(app.handle()));
             app.manage(StreamConfig { token: stream_token.clone(), port: STREAM_PORT });
@@ -106,12 +109,16 @@ pub fn run() {
             commands::cmd_delete_file,
             commands::cmd_download_file,
             commands::cmd_move_files,
+            commands::cmd_duplicate_files,
             commands::cmd_create_folder,
             commands::cmd_delete_folder,
             commands::cmd_get_bandwidth,
             commands::cmd_get_preview,
             commands::cmd_logout,
             commands::cmd_scan_folders,
+            commands::cmd_scan_folder,
+            commands::cmd_rename_file,
+            commands::cmd_deduplicate_folder,
             commands::cmd_search_global,
             commands::cmd_check_connection,
             commands::cmd_is_network_available,
@@ -124,6 +131,9 @@ pub fn run() {
             commands::cmd_clear_peer_cache,
             commands::cmd_get_me,
             commands::cmd_get_total_storage,
+            commands::cmd_unlock_vault,
+            commands::cmd_lock_vault,
+            commands::cmd_is_vault_unlocked,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

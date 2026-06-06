@@ -100,11 +100,84 @@ pub async fn cmd_delete_folder(
         _ => return Err("Only channels (folders) can be deleted.".to_string()),
     };
     
-    client.invoke(&tl::functions::channels::DeleteChannel {
+    match client.invoke(&tl::functions::channels::LeaveChannel {
         channel: input_channel,
-    }).await.map_err(|e| format!("Failed to delete channel: {}", e))?;
+    }).await {
+        Ok(_) => Ok(true),
+        Err(e) => {
+            let err_str = e.to_string();
+            log::warn!("Leave channel returned error: {}", err_str);
+            if err_str.contains("dropped") || err_str.contains("cancelled") {
+                log::info!("Assuming channel leave succeeded despite dropped connection.");
+                Ok(true)
+            } else {
+                Err(format!("Failed to delete/leave channel: {}", err_str))
+            }
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn cmd_deduplicate_folder(
+    folder_id: Option<i64>,
+    state: State<'_, TelegramState>,
+) -> Result<usize, String> {
+    let client_opt = { state.client.lock().await.clone() };
+    if client_opt.is_none() { 
+        return Ok(0); 
+    }
+    let client = client_opt.unwrap();
+    let peer = resolve_peer(&client, folder_id, &state.peer_cache).await?;
+
+    let mut files = Vec::new();
+    let mut msgs = client.iter_messages(&peer);
     
-    Ok(true)
+    // Fetch all messages in the folder
+    while let Some(msg) = msgs.next().await.map_err(|e| e.to_string())? {
+        if let Some(doc) = msg.media() {
+            let (name, size) = match doc {
+                Media::Document(d) => {
+                    let text = msg.text();
+                    let n = if text.is_empty() { d.name().to_string() } else { text.to_string() };
+                    (n, d.size())
+                },
+                Media::Photo(p) => {
+                    let mut s = 0;
+                    if let Some(tl::enums::Photo::Photo(raw)) = &p.raw.photo {
+                        for sz in &raw.sizes {
+                            if let tl::enums::PhotoSize::Size(ps) = sz { s = s.max(ps.size as i64); }
+                            if let tl::enums::PhotoSize::Progressive(ps) = sz { s = s.max(*ps.sizes.iter().max().unwrap_or(&0) as i64); }
+                        }
+                    }
+                    ("Photo.jpg".to_string(), s as i64)
+                },
+                _ => continue,
+            };
+            files.push((msg.id(), name, size));
+        }
+    }
+
+    // Group by (name, size)
+    let mut seen = std::collections::HashSet::new();
+    let mut to_delete = Vec::new();
+
+    // Iterate in reverse (oldest first or newest first depending on how iter_messages returns)
+    // iter_messages usually returns newest first. So by keeping the first one we see, we keep the newest.
+    // If we want to keep the oldest, we'd reverse it. We'll just keep the newest one and delete the rest.
+    for (id, name, size) in files {
+        let key = (name, size);
+        if seen.contains(&key) {
+            to_delete.push(id);
+        } else {
+            seen.insert(key);
+        }
+    }
+
+    if !to_delete.is_empty() {
+        client.delete_messages(&peer, &to_delete).await.map_err(|e| e.to_string())?;
+    }
+
+    Ok(to_delete.len())
 }
 
 
@@ -195,6 +268,72 @@ fn cleanup_partial_file(path: &str) {
     });
 }
 
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub struct FileScanResult {
+    pub uri: String,
+    pub name: String,
+    pub size: u64,
+}
+
+#[tauri::command]
+pub async fn cmd_scan_folder(uri: String, _app_handle: tauri::AppHandle) -> Result<Vec<FileScanResult>, String> {
+    #[cfg(target_os = "android")]
+    {
+        let ctx = ndk_context::android_context();
+        let vm = unsafe { jni::JavaVM::from_raw(ctx.vm().cast()) }.map_err(|e| format!("JNI VM error: {}", e))?;
+        let mut env = vm.attach_current_thread().map_err(|e| format!("JNI env error: {}", e))?;
+        
+        let android_context = unsafe { jni::objects::JObject::from_raw(ctx.context().cast()) };
+        let j_uri = env.new_string(&uri).map_err(|e| e.to_string())?;
+
+        let result = env.call_static_method(
+            "com/nfsprogramming/telegramdrive/FolderScanner",
+            "scanDirectory",
+            "(Landroid/content/Context;Ljava/lang/String;)Ljava/lang/String;",
+            &[
+                jni::objects::JValue::Object(&android_context),
+                jni::objects::JValue::Object(&j_uri.into())
+            ]
+        ).map_err(|e| format!("JNI call error: {}", e))?;
+
+        let j_str: jni::objects::JString = result.l().map_err(|e| e.to_string())?.into();
+        let json_str: String = env.get_string(&j_str).map_err(|e| e.to_string())?.into();
+
+        let parsed: Vec<serde_json::Value> = serde_json::from_str(&json_str).unwrap_or_default();
+        let mut results = Vec::new();
+        for item in parsed {
+            results.push(FileScanResult {
+                uri: item["uri"].as_str().unwrap_or("").to_string(),
+                name: item["name"].as_str().unwrap_or("").to_string(),
+                size: item["size"].as_u64().unwrap_or(0),
+            });
+        }
+        return Ok(results);
+    }
+    
+    #[cfg(not(target_os = "android"))]
+    {
+        use walkdir::WalkDir;
+        let mut results = Vec::new();
+        let base_path = std::path::Path::new(&uri);
+        for entry in WalkDir::new(base_path).into_iter().filter_map(|e| e.ok()) {
+            if entry.file_type().is_file() {
+                let path = entry.path();
+                let rel_path = path.strip_prefix(base_path).unwrap_or(path).to_string_lossy().to_string();
+                let name = rel_path.replace("\\", "/");
+                let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
+                results.push(FileScanResult {
+                    uri: path.to_string_lossy().to_string(),
+                    name,
+                    size,
+                });
+            }
+        }
+        Ok(results)
+    }
+}
+
+
 #[tauri::command]
 pub async fn cmd_cancel_transfer(
     transfer_id: String,
@@ -213,7 +352,7 @@ pub async fn cmd_upload_file(
     app_handle: tauri::AppHandle,
     state: State<'_, TelegramState>,
     bw_state: State<'_, BandwidthManager>,
-) -> Result<String, String> {
+) -> Result<i32, String> {
     let size = {
         #[cfg(target_os = "android")]
         {
@@ -240,7 +379,7 @@ pub async fn cmd_upload_file(
     if client_opt.is_none() {
         log::info!("[MOCK] Uploaded file {} to {:?}", path, folder_id);
         bw_state.add_up(size);
-        return Ok("Mock upload successful".to_string());
+        return Ok(0);
     }
     let client = client_opt.unwrap();
 
@@ -316,9 +455,20 @@ pub async fn cmd_upload_file(
         return Err("Transfer cancelled".to_string());
     }
 
+    let vault_key = if let Some(fid) = folder_id {
+        state.vault_keys.read().await.get(&fid).cloned()
+    } else {
+        None
+    };
+
     let client_clone = client.clone();
     let upload_result = tokio::spawn(async move {
-        client_clone.upload_stream(&mut reader, file_size as usize, file_name).await
+        if let Some(key) = vault_key {
+            let (mut encrypted_reader, final_size) = crate::crypto::encrypt_stream(reader, key, file_size).await;
+            client_clone.upload_stream(&mut encrypted_reader, final_size as usize, file_name).await
+        } else {
+            client_clone.upload_stream(&mut reader, file_size as usize, file_name).await
+        }
     }).await.map_err(|e| format!("Task join error: {}", e))?;
 
     // Stop progress reporter
@@ -335,7 +485,7 @@ pub async fn cmd_upload_file(
 
     let peer = resolve_peer(&client, folder_id, &state.peer_cache).await?;
 
-    client.send_message(&peer, message).await.map_err(map_error)?;
+    let sent_msg = client.send_message(&peer, message).await.map_err(map_error)?;
 
     bw_state.add_up(size);
 
@@ -346,7 +496,7 @@ pub async fn cmd_upload_file(
         });
     }
 
-    Ok("File uploaded successfully".to_string())
+    Ok(sent_msg.id())
 }
 
 #[tauri::command]
@@ -438,31 +588,89 @@ pub async fn cmd_download_file(
     let mut last_emit_time = std::time::Instant::now();
     let mut last_emit_bytes: u64 = 0;
 
-    while let Some(chunk) = download_iter.next().await.transpose() {
-        // Check cancellation
-        if state.cancelled_transfers.read().await.contains(&tid) {
-            state.cancelled_transfers.write().await.remove(&tid);
-            drop(file);
-            cleanup_partial_file(&save_path);
-            return Err("Transfer cancelled".to_string());
-        }
+    let vault_key = if let Some(fid) = folder_id {
+        state.vault_keys.read().await.get(&fid).cloned()
+    } else {
+        None
+    };
 
-        let bytes = chunk.map_err(|e| format!("Download chunk error: {}", e))?;
-        std::io::Write::write_all(&mut file, &bytes).map_err(|e| e.to_string())?;
-        downloaded += bytes.len() as u64;
+    if let Some(key) = vault_key {
+        let (mut tx_raw, rx_raw) = tokio::io::duplex(5 * 1024 * 1024);
+        let cancelled_clone = state.cancelled_transfers.clone();
+        let tid_clone = tid.clone();
         
-        // Time-based progress emission (every 250ms)
-        if !tid.is_empty() {
-            let now = std::time::Instant::now();
-            let dt = now.duration_since(last_emit_time).as_secs_f64();
-            if dt >= 0.25 || downloaded >= total_size {
-                let speed = if dt > 0.0 { ((downloaded - last_emit_bytes) as f64 / dt) as u64 } else { 0 };
-                let percent = if total_size > 0 { ((downloaded as f64 / total_size as f64) * 100.0).min(100.0) as u8 } else { 0 };
-                let _ = app_handle.emit("download-progress", ProgressPayload {
-                    id: tid.clone(), percent, uploaded_bytes: downloaded, total_bytes: total_size, speed_bytes_per_sec: speed,
-                });
-                last_emit_time = now;
-                last_emit_bytes = downloaded;
+        tokio::spawn(async move {
+            while let Some(chunk) = download_iter.next().await.transpose() {
+                if cancelled_clone.read().await.contains(&tid_clone) { break; }
+                if let Ok(bytes) = chunk {
+                    use tokio::io::AsyncWriteExt;
+                    if tx_raw.write_all(&bytes).await.is_err() { break; }
+                } else { break; }
+            }
+        });
+        
+        let mut decrypted_rx = crate::crypto::decrypt_stream(rx_raw, key).await;
+        let mut buffer = vec![0u8; 1024 * 1024];
+        
+        loop {
+            if state.cancelled_transfers.read().await.contains(&tid) {
+                state.cancelled_transfers.write().await.remove(&tid);
+                drop(file);
+                cleanup_partial_file(&save_path);
+                return Err("Transfer cancelled".to_string());
+            }
+
+            use tokio::io::AsyncReadExt;
+            match decrypted_rx.read(&mut buffer).await {
+                Ok(0) => break,
+                Ok(n) => {
+                    std::io::Write::write_all(&mut file, &buffer[..n]).map_err(|e| e.to_string())?;
+                    downloaded += n as u64;
+                    
+                    if !tid.is_empty() {
+                        let now = std::time::Instant::now();
+                        let dt = now.duration_since(last_emit_time).as_secs_f64();
+                        if dt >= 0.25 || downloaded >= total_size {
+                            let speed = if dt > 0.0 { ((downloaded - last_emit_bytes) as f64 / dt) as u64 } else { 0 };
+                            let percent = if total_size > 0 { ((downloaded as f64 / total_size as f64) * 100.0).min(100.0) as u8 } else { 0 };
+                            let _ = app_handle.emit("download-progress", ProgressPayload {
+                                id: tid.clone(), percent, uploaded_bytes: downloaded, total_bytes: total_size, speed_bytes_per_sec: speed,
+                            });
+                            last_emit_time = now;
+                            last_emit_bytes = downloaded;
+                        }
+                    }
+                }
+                Err(e) => return Err(e.to_string()),
+            }
+        }
+    } else {
+        while let Some(chunk) = download_iter.next().await.transpose() {
+            // Check cancellation
+            if state.cancelled_transfers.read().await.contains(&tid) {
+                state.cancelled_transfers.write().await.remove(&tid);
+                drop(file);
+                cleanup_partial_file(&save_path);
+                return Err("Transfer cancelled".to_string());
+            }
+
+            let bytes = chunk.map_err(|e| format!("Download chunk error: {}", e))?;
+            std::io::Write::write_all(&mut file, &bytes).map_err(|e| e.to_string())?;
+            downloaded += bytes.len() as u64;
+            
+            // Time-based progress emission (every 250ms)
+            if !tid.is_empty() {
+                let now = std::time::Instant::now();
+                let dt = now.duration_since(last_emit_time).as_secs_f64();
+                if dt >= 0.25 || downloaded >= total_size {
+                    let speed = if dt > 0.0 { ((downloaded - last_emit_bytes) as f64 / dt) as u64 } else { 0 };
+                    let percent = if total_size > 0 { ((downloaded as f64 / total_size as f64) * 100.0).min(100.0) as u8 } else { 0 };
+                    let _ = app_handle.emit("download-progress", ProgressPayload {
+                        id: tid.clone(), percent, uploaded_bytes: downloaded, total_bytes: total_size, speed_bytes_per_sec: speed,
+                    });
+                    last_emit_time = now;
+                    last_emit_bytes = downloaded;
+                }
             }
         }
     }
@@ -511,6 +719,28 @@ pub async fn cmd_move_files(
 }
 
 #[tauri::command]
+pub async fn cmd_duplicate_files(
+    message_ids: Vec<i32>,
+    folder_id: Option<i64>,
+    state: State<'_, TelegramState>,
+) -> Result<bool, String> {
+    let client_opt = { state.client.lock().await.clone() };
+    if client_opt.is_none() { 
+        log::info!("[MOCK] Duplicated msgs {:?} in {:?}", message_ids, folder_id);
+        return Ok(true); 
+    }
+    let client = client_opt.unwrap();
+
+    let peer = resolve_peer(&client, folder_id, &state.peer_cache).await?;
+
+    match client.forward_messages(&peer, &message_ids, &peer).await {
+        Ok(_) => Ok(true),
+        Err(e) => Err(format!("Duplicate failed: {}", e)),
+    }
+}
+
+
+#[tauri::command]
 pub async fn cmd_get_files(
     folder_id: Option<i64>,
     state: State<'_, TelegramState>,
@@ -530,7 +760,27 @@ pub async fn cmd_get_files(
         if let Some(doc) = msg.media() {
             let (name, size, mime, ext) = match doc {
                 Media::Document(d) => {
-                    let n = d.name().to_string();
+                    // 1. Try filename from document attributes (d.raw is MessageMediaDocument)
+                    let attr_name = d.raw.document.as_ref().and_then(|doc| {
+                        if let tl::enums::Document::Document(inner) = doc {
+                            inner.attributes.iter().find_map(|a| match a {
+                                tl::enums::DocumentAttribute::Filename(f) => {
+                                    if f.file_name.is_empty() { None } else { Some(f.file_name.clone()) }
+                                }
+                                _ => None,
+                            })
+                        } else { None }
+                    });
+                    // 2. Fall back to message caption text
+                    let text = msg.text();
+                    let n = attr_name
+                        .or_else(|| if !text.is_empty() { Some(text.to_string()) } else { None })
+                        .unwrap_or_else(|| {
+                            // 3. Fall back to mime-type based name
+                            let mime = d.mime_type().unwrap_or("application/octet-stream");
+                            let ext = mime.split('/').last().unwrap_or("bin");
+                            format!("file_{}.{}", msg.id(), ext)
+                        });
                     let s = d.size();
                     let m = d.mime_type().map(|s| s.to_string());
                     let e = std::path::Path::new(&n).extension().map(|os| os.to_str().unwrap_or("").to_string());
@@ -558,6 +808,44 @@ pub async fn cmd_get_files(
     }
 
     Ok(files)
+}
+
+#[tauri::command]
+pub async fn cmd_rename_file(
+    message_id: i32,
+    folder_id: Option<i64>,
+    new_name: String,
+    state: State<'_, TelegramState>,
+) -> Result<bool, String> {
+    let client_opt = { state.client.lock().await.clone() };
+    if client_opt.is_none() { 
+         log::info!("[MOCK] Renamed message {} in folder {:?} to {}", message_id, folder_id, new_name);
+        return Ok(true); 
+    }
+    let client = client_opt.unwrap();
+
+    let peer = resolve_peer(&client, folder_id, &state.peer_cache).await?;
+    
+    // Edit the message text to be the new filename. Grammers preserves media if not explicitly replaced.
+    let new_message = InputMessage::new().text(new_name);
+    match client.edit_message(&peer, message_id, new_message).await {
+        Ok(_) => Ok(true),
+        Err(e) => {
+            log::error!("Failed to rename file: {}", e);
+            match e {
+                grammers_client::InvocationError::Rpc(rpc_err) => {
+                    if rpc_err.name == "MESSAGE_NOT_MODIFIED" {
+                        return Err("Telegram API blocks renaming this file. (Tip: You cannot rename forwarded messages, or messages older than 48 hours).".to_string());
+                    }
+                    if rpc_err.name == "MESSAGE_AUTHOR_REQUIRED" {
+                        return Err("You don't have permission to rename this file. Only the original sender can rename it.".to_string());
+                    }
+                    return Err(format!("Rename failed: {}", rpc_err.name));
+                },
+                _ => return Err(format!("Rename failed: {}", e)),
+            }
+        }
+    }
 }
 
 #[tauri::command]
@@ -661,15 +949,12 @@ pub async fn cmd_scan_folders(
     
     log::info!("Starting Folder Scan...");
 
-    // Acquire write lock once for the entire scan to populate the peer cache
-    let mut peer_cache = state.peer_cache.write().await;
-
     while let Some(dialog) = dialogs.next().await.map_err(|e| e.to_string())? {
         // Populate peer cache for every dialog we encounter (free priming)
         match &dialog.peer {
             Peer::Channel(c) => {
                 let id = c.raw.id;
-                peer_cache.insert(id, dialog.peer.clone());
+                state.peer_cache.write().await.insert(id, dialog.peer.clone());
 
                 let name = c.raw.title.clone();
                 let access_hash = c.raw.access_hash.unwrap_or(0);
@@ -705,7 +990,7 @@ pub async fn cmd_scan_folders(
                 }
             },
             Peer::User(u) => {
-                peer_cache.insert(u.raw.id(), dialog.peer.clone());
+                state.peer_cache.write().await.insert(u.raw.id(), dialog.peer.clone());
                 log::debug!("[SCAN] Cached User Peer: {}", u.raw.id());
             },
             peer => {
@@ -714,7 +999,8 @@ pub async fn cmd_scan_folders(
         }
     }
     
-    log::info!("Scan complete. Found {} folders. Peer cache size: {}.", folders.len(), peer_cache.len());
+    log::info!("Scan complete. Found {} folders. Peer cache size: {}.", folders.len(), state.peer_cache.read().await.len());
+
     Ok(folders)
 }
 

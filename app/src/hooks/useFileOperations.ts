@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { useConfirm } from '../context/ConfirmContext';
 import { TelegramFile } from '../types';
+import { searchFiles } from '../services/db';
 
 export function useFileOperations(
     activeFolderId: number | null,
@@ -132,9 +133,34 @@ export function useFileOperations(
         handleBulkDownload,
         handleBulkMove,
         handleDownloadFolder,
-        handleGlobalSearch: async (query: string) => {
+        handleGlobalSearch: async (query: string): Promise<TelegramFile[]> => {
             try {
-                return await invoke<TelegramFile[]>('cmd_search_global', { query });
+                // 1. Search locally using FTS5 (OCR & PDF text)
+                const localFtsResults = await searchFiles(query);
+                const localFiles: TelegramFile[] = localFtsResults.map(r => ({
+                    id: r.id,
+                    folder_id: r.folder_id,
+                    name: r.name,
+                    size: 0,
+                    mime_type: null,
+                    file_ext: null,
+                    created_at: new Date().toISOString(),
+                    icon_type: 'file'
+                }));
+
+                // 2. Search globally via Telegram
+                let telegramFiles: TelegramFile[] = [];
+                try {
+                    telegramFiles = await invoke<TelegramFile[]>('cmd_search_global', { query });
+                } catch (e) {
+                    console.error("Telegram search failed", e);
+                }
+
+                // 3. Merge and deduplicate by ID
+                const merged = [...localFiles, ...telegramFiles];
+                const uniqueFiles = Array.from(new Map(merged.map(f => [f.id, f])).values());
+                
+                return uniqueFiles;
             } catch {
                 return [];
             }

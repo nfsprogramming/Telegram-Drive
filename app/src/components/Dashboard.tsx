@@ -2,10 +2,11 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { invoke } from '@tauri-apps/api/core';
+import { onOpenUrl } from '@tauri-apps/plugin-deep-link';
 import { toast } from 'sonner';
 
 import { TelegramFile, BandwidthStats } from '../types';
-import { formatBytes, isMediaFile, isPdfFile } from '../utils';
+import { isMediaFile, isPdfFile } from '../utils';
 import { useConfirm } from '../context/ConfirmContext';
 
 // Components
@@ -27,14 +28,19 @@ import { useFileOperations } from '../hooks/useFileOperations';
 import { useFileUpload } from '../hooks/useFileUpload';
 import { useFileDownload } from '../hooks/useFileDownload';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
+import { useHardwareBack } from '../hooks/useHardwareBack';
+import { useAutoLock } from '../hooks/useAutoLock';
 
 export function Dashboard({ onLogout, onAddAccount }: { onLogout: () => void, onAddAccount: () => void }) {
     const queryClient = useQueryClient();
 
     const {
         store, accounts, activeAccountId, handleSwitchAccount, folders, activeFolderId, setActiveFolderId, isSyncing, isConnected, isSessionReady,
+        unlockedVaults, handleUnlockVault, handleLockVault,
         handleLogout, handleSyncFolders, handleCreateFolder, handleFolderDelete
     } = useTelegramConnection(onLogout);
+
+    useAutoLock(unlockedVaults, handleLockVault);
 
     const { confirm } = useConfirm();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -71,6 +77,7 @@ export function Dashboard({ onLogout, onAddAccount }: { onLogout: () => void, on
     const [isSearching, setIsSearching] = useState(false);
     const [internalDragFileId, _setInternalDragFileId] = useState<number | null>(null);
     const internalDragRef = useRef<number | null>(null);
+    const [pendingDeepLinkFileId, setPendingDeepLinkFileId] = useState<number | null>(null);
 
     const setInternalDragFileId = (id: number | null) => {
         internalDragRef.current = id;
@@ -80,6 +87,61 @@ export function Dashboard({ onLogout, onAddAccount }: { onLogout: () => void, on
     const [pdfFile, setPdfFile] = useState<TelegramFile | null>(null);
     const [previewContextFiles, setPreviewContextFiles] = useState<TelegramFile[]>([]);
     const [previewContextIndex, setPreviewContextIndex] = useState(-1);
+
+    // Hardware back button handlers (stack-based, order matters: lowest to highest priority)
+    useHardwareBack(activeFolderId !== null, useCallback(() => {
+        // Find parent folder and navigate up if possible. 
+        // For now, just go to root since we don't have breadcrumbs state natively accessible here without a tree lookup.
+        // Or better, just let it be null.
+        setActiveFolderId(null);
+    }, [setActiveFolderId]));
+
+    useHardwareBack(selectedIds.length > 0, useCallback(() => {
+        setSelectedIds([]);
+    }, []));
+
+    useHardwareBack(showMoveModal, useCallback(() => {
+        setShowMoveModal(false);
+    }, []));
+
+    // Deep Link Handling
+    useEffect(() => {
+        const unlisten = onOpenUrl((urls) => {
+            if (!urls || urls.length === 0) return;
+            const urlStr = urls[0];
+            try {
+                const url = new URL(urlStr);
+                if (url.protocol !== 'tgdrive:') return;
+                
+                const type = url.hostname; // 'file' or 'folder'
+                const idStr = url.searchParams.get('id');
+                const folderStr = url.searchParams.get('folder');
+                
+                if (!idStr) return;
+                const targetId = parseInt(idStr, 10);
+                
+                if (type === 'folder') {
+                    setActiveFolderId(targetId);
+                } else if (type === 'file') {
+                    const folderId = folderStr && folderStr !== 'null' ? parseInt(folderStr, 10) : null;
+                    setActiveFolderId(folderId);
+                    setPendingDeepLinkFileId(targetId);
+                }
+            } catch (e) {
+                console.error("Failed to parse deep link", e);
+            }
+        });
+
+        return () => {
+            unlisten.then(fn => fn()).catch(console.error);
+        };
+    }, [setActiveFolderId]);
+
+    useHardwareBack(!!previewFile || !!playingFile || !!pdfFile, useCallback(() => {
+        setPreviewFile(null);
+        setPlayingFile(null);
+        setPdfFile(null);
+    }, []));
 
     useEffect(() => {
         if (store) {
@@ -96,14 +158,14 @@ export function Dashboard({ onLogout, onAddAccount }: { onLogout: () => void, on
     }, [store, viewMode]);
 
 
-    const { data: allFiles = [], isLoading, error } = useQuery({
+    const { data: allFiles = [], isLoading, error, refetch } = useQuery({
         queryKey: ['files', activeAccountId, activeFolderId],
-        queryFn: () => invoke<any[]>('cmd_get_files', { folderId: activeFolderId }).then(res => res.map(f => ({
-            ...f,
-            sizeStr: formatBytes(f.size),
-            type: f.icon_type || (f.name.endsWith('/') ? 'folder' : 'file')
-        }))),
-        enabled: !!store && isSessionReady,
+        queryFn: async () => {
+            if (!activeAccountId || !isSessionReady) return [];
+            return await invoke<TelegramFile[]>('cmd_get_files', { folderId: activeFolderId });
+        },
+        enabled: isSessionReady && activeAccountId !== null,
+        refetchInterval: 30000,
     });
 
     const displayedFiles = searchTerm.length > 2
@@ -117,6 +179,28 @@ export function Dashboard({ onLogout, onAddAccount }: { onLogout: () => void, on
         enabled: !!store
     });
 
+    // Handle opening the pending deep link file once it loads
+    useEffect(() => {
+        if (pendingDeepLinkFileId && allFiles.length > 0) {
+            const file = allFiles.find((f: TelegramFile) => f.id === pendingDeepLinkFileId);
+            if (file) {
+                // handlePreview is hoisted by JS or we can just set the state directly
+                if (isMediaFile(file.name)) {
+                    setPlayingFile(file);
+                } else if (isPdfFile(file.name)) {
+                    setPdfFile(file);
+                } else {
+                    setPreviewFile(file);
+                }
+                setPreviewContextFiles(allFiles);
+                setPreviewContextIndex(allFiles.indexOf(file));
+                setSelectedIds([file.id]);
+                setPendingDeepLinkFileId(null);
+                toast.success("Opened shared file");
+            }
+        }
+    }, [pendingDeepLinkFileId, allFiles]);
+
 
     const {
         handleDelete, handleBulkDelete, handleBulkDownload,
@@ -124,7 +208,7 @@ export function Dashboard({ onLogout, onAddAccount }: { onLogout: () => void, on
 
     } = useFileOperations(activeFolderId, selectedIds, setSelectedIds, displayedFiles);
 
-    const { uploadQueue, setUploadQueue, handleManualUpload, cancelAll: cancelUploads, cancelItem: cancelUploadItem, retryItem: retryUploadItem, isDragging } = useFileUpload(activeFolderId, store);
+    const { uploadQueue, setUploadQueue, handleManualUpload, cancelAll: cancelUploads, cancelItem: cancelUploadItem, retryItem: retryUploadItem, isDragging } = useFileUpload(activeFolderId, store, allFiles);
     const { downloadQueue, queueDownload, clearFinished: clearDownloads, cancelAll: cancelDownloads, cancelItem: cancelDownloadItem, retryItem: retryDownloadItem } = useFileDownload(store);
 
 
@@ -211,10 +295,19 @@ export function Dashboard({ onLogout, onAddAccount }: { onLogout: () => void, on
 
     const handleFileClick = (e: React.MouseEvent, id: number) => {
         e.stopPropagation();
-        if (e.metaKey || e.ctrlKey) {
+        const file = displayedFiles.find(f => f.id === id) || searchResults.find(f => f.id === id);
+        if (!file) return;
+
+        if (e.metaKey || e.ctrlKey || selectedIds.length > 0) {
             setSelectedIds(ids => ids.includes(id) ? ids.filter(i => i !== id) : [...ids, id]);
+            return;
+        }
+
+        if (file.type === 'folder') {
+            setActiveFolderId(file.id);
+            setSearchTerm('');
         } else {
-            setSelectedIds([id]);
+            handlePreview(file);
         }
     }
 
@@ -231,6 +324,7 @@ export function Dashboard({ onLogout, onAddAccount }: { onLogout: () => void, on
 
         const isMedia = isMediaFile(file.name);
         const isPdf = isPdfFile(file.name);
+        const isImg = file.name ? file.name.match(/\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i) : false;
 
         if (isMedia) {
             setPlayingFile(file);
@@ -240,53 +334,53 @@ export function Dashboard({ onLogout, onAddAccount }: { onLogout: () => void, on
             setPdfFile(file);
             setPreviewFile(null);
             setPlayingFile(null);
-        } else {
+        } else if (isImg) {
             setPreviewFile(file);
             setPlayingFile(null);
             setPdfFile(null);
+        } else {
+            // Auto-download generic files instead of showing unsupported preview
+            queueDownload(file.id, file.name, activeFolderId);
         }
     };
 
     const navigatePreview = useCallback((step: 1 | -1) => {
         if (previewContextFiles.length === 0) return;
+        if (previewContextIndex === -1) return;
+        const nextIndex = (previewContextIndex + step + previewContextFiles.length) % previewContextFiles.length;
+        handlePreview(previewContextFiles[nextIndex], previewContextFiles);
+    }, [previewContextFiles, previewContextIndex]);
 
-        const currentFileId = previewFile?.id ?? playingFile?.id ?? pdfFile?.id;
-        if (!currentFileId) return;
+    const handleNextPreview = useCallback(() => navigatePreview(1), [navigatePreview]);
+    const handlePrevPreview = useCallback(() => navigatePreview(-1), [navigatePreview]);
 
-        const currentIndex = previewContextFiles.findIndex((f) => f.id === currentFileId);
-        if (currentIndex === -1) return;
-
-        const nextIndex = (currentIndex + step + previewContextFiles.length) % previewContextFiles.length;
-        const nextFile = previewContextFiles[nextIndex];
-        if (!nextFile) return;
-
-        setPreviewContextIndex(nextIndex);
-
-        const isMedia = isMediaFile(nextFile.name);
-        const isPdf = isPdfFile(nextFile.name);
-
-        if (isMedia) {
-            setPlayingFile(nextFile);
-            setPreviewFile(null);
-            setPdfFile(null);
-        } else if (isPdf) {
-            setPdfFile(nextFile);
-            setPreviewFile(null);
-            setPlayingFile(null);
-        } else {
-            setPreviewFile(nextFile);
-            setPlayingFile(null);
-            setPdfFile(null);
+    const handleRename = async (id: number, newName: string) => {
+        try {
+            await invoke('cmd_rename_file', { messageId: id, folderId: activeFolderId, newName });
+            queryClient.invalidateQueries({ queryKey: ['files', activeAccountId, activeFolderId] });
+            toast.success("File renamed");
+        } catch (e) {
+            toast.error("Failed to rename file: " + e);
         }
-    }, [previewContextFiles, previewFile, playingFile, pdfFile]);
+    };
 
-    const handleNextPreview = useCallback(() => {
-        navigatePreview(1);
-    }, [navigatePreview]);
-
-    const handlePrevPreview = useCallback(() => {
-        navigatePreview(-1);
-    }, [navigatePreview]);
+    const handleDeduplicate = async () => {
+        if (!await confirm({ title: "Clean Duplicates", message: "Scan the current folder and delete exact duplicate files (same name & size)? Only one copy will be kept.", confirmText: "Clean Now", variant: 'danger' })) return;
+        
+        try {
+            const toastId = toast.loading("Scanning for duplicates...");
+            const deletedCount: number = await invoke('cmd_deduplicate_folder', { folderId: activeFolderId });
+            toast.dismiss(toastId);
+            if (deletedCount > 0) {
+                toast.success(`Removed ${deletedCount} duplicate file(s)`);
+                queryClient.invalidateQueries({ queryKey: ['files', activeAccountId, activeFolderId] });
+            } else {
+                toast.info("No duplicates found in this folder");
+            }
+        } catch (e) {
+            toast.error("Failed to clean duplicates: " + e);
+        }
+    };
 
     const previewNeighborFiles = useCallback(() => {
         if (previewContextFiles.length === 0) {
@@ -369,8 +463,8 @@ export function Dashboard({ onLogout, onAddAccount }: { onLogout: () => void, on
     const previewNeighbors = previewNeighborFiles();
 
     return (
-        <div
-            className="flex flex-col md:flex-row h-screen w-full overflow-hidden bg-telegram-bg relative"
+        <div 
+            className="flex flex-col md:flex-row h-[100dvh] w-full bg-telegram-bg text-telegram-text overflow-hidden relative selection:bg-telegram-primary/30"
             onClick={() => {
                 setSelectedIds([]);
                 if (isSidebarOpen) setIsSidebarOpen(false);
@@ -420,6 +514,9 @@ export function Dashboard({ onLogout, onAddAccount }: { onLogout: () => void, on
 
             <Sidebar
                 folders={folders}
+                unlockedVaults={unlockedVaults}
+                handleUnlockVault={handleUnlockVault}
+                handleLockVault={handleLockVault}
                 activeFolderId={activeFolderId}
                 setActiveFolderId={setActiveFolderId}
                 onDrop={handleDropOnFolder}
@@ -439,7 +536,7 @@ export function Dashboard({ onLogout, onAddAccount }: { onLogout: () => void, on
                 onClose={() => setIsSidebarOpen(false)}
             />
 
-            <main className="flex-1 flex flex-col" onClick={(e) => { if (e.target === e.currentTarget) setSelectedIds([]); }}>
+            <main className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden" onClick={(e) => { if (e.target === e.currentTarget) setSelectedIds([]); }}>
                 <TopBar
                     currentFolderName={currentFolderName}
                     selectedIds={selectedIds}
@@ -451,7 +548,8 @@ export function Dashboard({ onLogout, onAddAccount }: { onLogout: () => void, on
                     setViewMode={setViewMode}
                     searchTerm={searchTerm}
                     onSearchChange={setSearchTerm}
-                    onToggleSidebar={() => setIsSidebarOpen(v => !v)}
+                    onToggleSidebar={() => setIsSidebarOpen(true)}
+                    onDeduplicate={handleDeduplicate}
                 />
                 {searchTerm.length > 2 && (
                     <div className="px-6 pt-4 pb-0">
@@ -478,6 +576,8 @@ export function Dashboard({ onLogout, onAddAccount }: { onLogout: () => void, on
                     onDrop={handleDropOnFolder}
                     onDragStart={(fileId) => setInternalDragFileId(fileId)}
                     onDragEnd={() => setTimeout(() => setInternalDragFileId(null), 50)}
+                    onRename={handleRename}
+                    onRefresh={refetch}
                 />
             </main>
 

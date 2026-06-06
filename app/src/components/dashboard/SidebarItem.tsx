@@ -65,11 +65,13 @@ export function SidebarItem({ icon: Icon, label, active = false, onClick, onDrop
         >
             <Icon className={`w-4 h-4 ${isOver ? 'text-telegram-primary' : ''}`} />
             <span className="flex-1 text-left truncate">{label}</span>
-            {onDelete && (
-                <div onClick={(e) => { e.stopPropagation(); onDelete(); }} className="opacity-0 group-hover:opacity-100 p-1 hover:text-red-400">
-                    <Plus className="w-3 h-3 rotate-45" />
-                </div>
-            )}
+            <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1">
+                {onDelete && (
+                    <div onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-1 hover:text-red-400 transition-colors cursor-pointer" title="Delete">
+                        <Plus className="w-3 h-3 rotate-45" />
+                    </div>
+                )}
+            </div>
         </button>
     )
 }

@@ -29,6 +29,9 @@ pub struct TelegramState {
     /// Set of transfer IDs that have been cancelled. Checked cooperatively
     /// in upload/download chunk loops. Cleared on logout.
     pub cancelled_transfers: Arc<tokio::sync::RwLock<HashSet<String>>>,
+    /// Cache of decrypted vault keys (AES-256-GCM) keyed by folder_id.
+    /// Wiped on logout or manual locking.
+    pub vault_keys: Arc<tokio::sync::RwLock<HashMap<i64, Vec<u8>>>>,
 }
 
 pub mod auth;
@@ -37,6 +40,7 @@ pub mod preview;
 pub mod utils;
 pub mod network;
 pub mod streaming;
+pub mod vault;
 
 pub use auth::*;
 pub use fs::*;
@@ -44,3 +48,4 @@ pub use preview::*;
 pub use utils::*;
 pub use network::*;
 pub use streaming::*;
+pub use vault::*;

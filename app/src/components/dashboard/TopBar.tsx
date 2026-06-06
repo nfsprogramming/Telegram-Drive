@@ -1,5 +1,6 @@
-import { HardDrive, LayoutGrid, Sun, Moon, Menu, Search } from 'lucide-react';
+import { HardDrive, LayoutGrid, Sun, Moon, Menu, Search, Share2 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
+import { toast } from 'sonner';
 
 interface TopBarProps {
     currentFolderName: string;
@@ -13,11 +14,12 @@ interface TopBarProps {
     searchTerm: string;
     onSearchChange: (term: string) => void;
     onToggleSidebar: () => void;
+    onDeduplicate: () => void;
 }
 
 export function TopBar({
     currentFolderName, selectedIds, onShowMoveModal, onBulkDownload, onBulkDelete,
-    onDownloadFolder, viewMode, setViewMode, searchTerm, onSearchChange, onToggleSidebar
+    onDownloadFolder, viewMode, setViewMode, searchTerm, onSearchChange, onToggleSidebar, onDeduplicate
 }: TopBarProps) {
     const { theme, toggleTheme } = useTheme();
 
@@ -49,8 +51,9 @@ export function TopBar({
                 {selectedIds.length > 0 && (
                     <div className="flex items-center gap-2 mr-4 animate-in fade-in slide-in-from-top-2">
                         <span className="text-xs text-telegram-subtext mr-2">{selectedIds.length} Selected</span>
-                        <button onClick={onShowMoveModal} className="px-3 py-1.5 bg-telegram-primary/20 hover:bg-telegram-primary/30 text-telegram-primary rounded-md text-xs transition font-medium">Move to...</button>
-                        <button onClick={onBulkDownload} className="px-3 py-1.5 bg-telegram-hover hover:bg-telegram-border rounded-md text-xs text-telegram-text transition">Download Selected</button>
+                        <button onClick={onShowMoveModal} className="px-3 py-1.5 bg-telegram-primary/20 hover:bg-telegram-primary/30 text-telegram-primary rounded-md text-xs transition font-medium">Move</button>
+                        <button onClick={onBulkDownload} className="px-3 py-1.5 bg-telegram-hover hover:bg-telegram-border rounded-md text-xs text-telegram-text transition">Download</button>
+                        <button onClick={() => toast.info('Share is coming soon!')} className="px-3 py-1.5 bg-telegram-hover hover:bg-telegram-border rounded-md text-xs text-telegram-text transition flex items-center gap-1"><Share2 className="w-3 h-3" /> Share</button>
                         <button onClick={onBulkDelete} className="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-md text-xs transition">Delete</button>
                     </div>
                 )}
@@ -59,6 +62,13 @@ export function TopBar({
                     <HardDrive className="w-5 h-5" />
                     <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-[10px] bg-telegram-surface border border-telegram-border px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-lg">
                         Download All Files
+                    </span>
+                </button>
+
+                <button onClick={onDeduplicate} className="p-2 hover:bg-telegram-hover rounded-md text-telegram-subtext hover:text-telegram-text transition group relative" title="Clean Duplicates">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-[10px] bg-telegram-surface border border-telegram-border px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-lg">
+                        Clean Duplicates
                     </span>
                 </button>
 

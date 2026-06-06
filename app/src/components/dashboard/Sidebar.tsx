@@ -11,14 +11,17 @@ import { Trash2 } from 'lucide-react';
 
 interface SidebarProps {
     folders: TelegramFolder[];
+    unlockedVaults: Set<number>;
+    handleUnlockVault: (folderId: number, password: string) => Promise<boolean>;
+    handleLockVault: (folderId: number) => Promise<void>;
     activeFolderId: number | null;
     setActiveFolderId: (id: number | null) => void;
     onDrop: (e: React.DragEvent, folderId: number | null) => void;
     onDelete: (id: number, name: string) => void;
-    onCreate: (name: string) => Promise<void>;
+    onCreate: (name: string, password?: string) => Promise<void>;
     isSyncing: boolean;
     isConnected: boolean;
-    onSync: () => void;
+    onSync: (silent?: boolean) => void;
     onLogout: () => void;
     bandwidth: BandwidthStats | null;
     accounts: TelegramAccount[];
@@ -31,13 +34,17 @@ interface SidebarProps {
 }
 
 export function Sidebar({
-    folders, activeFolderId, setActiveFolderId, onDrop, onDelete, onCreate,
+    folders, unlockedVaults, handleUnlockVault, handleLockVault, activeFolderId, setActiveFolderId, onDrop, onDelete, onCreate,
     isSyncing, isConnected, onSync, onLogout, bandwidth,
     accounts, activeAccountId, onSwitchAccount, onAddAccount, onRemoveAccount,
     isOpen, onClose
 }: SidebarProps) {
     const [showNewFolderInput, setShowNewFolderInput] = useState(false);
     const [newFolderName, setNewFolderName] = useState('');
+    const [newFolderPassword, setNewFolderPassword] = useState('');
+    const [isVault, setIsVault] = useState(false);
+    const [unlockPromptId, setUnlockPromptId] = useState<number | null>(null);
+    const [unlockPassword, setUnlockPassword] = useState('');
     const [totalStorage, setTotalStorage] = useState<number | null>(null);
     const [isCalculatingStorage, setIsCalculatingStorage] = useState(false);
 
@@ -70,8 +77,10 @@ export function Sidebar({
     const submitCreate = async () => {
         if (!newFolderName.trim()) return;
         try {
-            await onCreate(newFolderName);
+            await onCreate(newFolderName, isVault ? newFolderPassword : undefined);
             setNewFolderName("");
+            setNewFolderPassword("");
+            setIsVault(false);
             setShowNewFolderInput(false);
         } catch {
             // handled by parent
@@ -80,18 +89,17 @@ export function Sidebar({
 
     return (
         <>
-            {/* Mobile Overlay */}
             {isOpen && (
                 <div 
-                    className="fixed inset-0 bg-black/50 z-40 md:hidden transition-opacity"
+                    className="fixed inset-0 bg-black/50 z-40 md:hidden animate-fade-overlay"
                     onClick={onClose}
                 />
             )}
             
             <aside className={`
                 fixed inset-y-0 left-0 z-50 w-72 bg-telegram-surface border-r border-telegram-border flex flex-col shrink-0
-                transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 pt-8 md:pt-0
-                ${isOpen ? 'translate-x-0' : '-translate-x-full'}
+                md:relative md:translate-x-0 pt-8 md:pt-0
+                ${isOpen ? 'animate-slide-in-left translate-x-0' : '-translate-x-full md:translate-x-0'}
             `} onClick={e => e.stopPropagation()}>
                 <div className="p-4 flex items-center justify-between border-b border-telegram-border">
                 <div className="flex items-center gap-2">
@@ -175,34 +183,141 @@ export function Sidebar({
                     onDrop={(e: React.DragEvent) => onDrop(e, null)}
                     folderId={null}
                 />
-                {folders.map(folder => (
-                    <SidebarItem
-                        key={folder.id}
-                        icon={Folder}
-                        label={folder.name}
-                        active={activeFolderId === folder.id}
-                        onClick={() => setActiveFolderId(folder.id)}
-                        onDrop={(e: React.DragEvent) => onDrop(e, folder.id)}
-                        onDelete={() => onDelete(folder.id, folder.name)}
-                        folderId={folder.id}
-                    />
-                ))}
+                {folders.map(folder => {
+                    const isVaultFolder = folder.name.includes('🔒');
+                    const isUnlocked = unlockedVaults.has(folder.id);
+                    const isPrompting = unlockPromptId === folder.id;
+
+                    return (
+                        <div key={folder.id} className="flex flex-col">
+                            <SidebarItem
+                                icon={Folder}
+                                label={folder.name}
+                                active={activeFolderId === folder.id}
+                                onClick={() => {
+                                    if (isVaultFolder && !isUnlocked) {
+                                        if (isPrompting) {
+                                            setUnlockPromptId(null);
+                                        } else {
+                                            setUnlockPromptId(folder.id);
+                                            setUnlockPassword('');
+                                        }
+                                    } else {
+                                        setActiveFolderId(folder.id);
+                                    }
+                                }}
+                                onDrop={(e: React.DragEvent) => onDrop(e, folder.id)}
+                                onDelete={() => onDelete(folder.id, folder.name)}
+                                folderId={folder.id}
+                            />
+                            {isVaultFolder && isUnlocked && activeFolderId === folder.id && (
+                                <button 
+                                    onClick={(e) => { e.stopPropagation(); handleLockVault(folder.id); }}
+                                    className="ml-8 mt-1 text-xs text-red-400 hover:text-red-300 flex items-center gap-1 w-fit"
+                                >
+                                    Lock Vault
+                                </button>
+                            )}
+                            {isPrompting && (
+                                <div className="mt-1 ml-4 pl-3 py-1.5 border-l-2 border-telegram-border/50 animate-fade-in flex flex-col gap-2">
+                                    <input
+                                        autoFocus
+                                        type="password"
+                                        className="w-full bg-black/20 rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-telegram-primary"
+                                        placeholder="Vault Password"
+                                        value={unlockPassword}
+                                        onChange={e => setUnlockPassword(e.target.value)}
+                                        onKeyDown={async (e) => {
+                                            if (e.key === 'Enter' && unlockPassword) {
+                                                const success = await handleUnlockVault(folder.id, unlockPassword);
+                                                if (success) {
+                                                    setUnlockPromptId(null);
+                                                    setUnlockPassword('');
+                                                    setActiveFolderId(folder.id);
+                                                }
+                                            }
+                                        }}
+                                    />
+                                    <div className="flex gap-2">
+                                        <button 
+                                            onClick={() => { setUnlockPromptId(null); setUnlockPassword(''); }}
+                                            className="px-2 py-1 text-xs text-red-400 hover:bg-red-400/10 rounded transition-colors"
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button 
+                                            onClick={async () => {
+                                                if (!unlockPassword) return;
+                                                const success = await handleUnlockVault(folder.id, unlockPassword);
+                                                if (success) {
+                                                    setUnlockPromptId(null);
+                                                    setUnlockPassword('');
+                                                    setActiveFolderId(folder.id);
+                                                }
+                                            }}
+                                            className="px-2 py-1 text-xs text-telegram-primary hover:bg-telegram-primary/10 rounded transition-colors font-medium"
+                                        >
+                                            Unlock
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    );
+                })}
             </nav>
 
             {/* Sticky Create Folder section — always visible above the footer */}
             <div className="px-2 pb-2 border-b border-telegram-border">
                 {showNewFolderInput ? (
-                    <div className="px-3 py-2">
+                    <div className="px-3 py-2 bg-white/5 rounded-lg border border-telegram-border space-y-2">
                         <input
                             autoFocus
                             type="text"
-                            className="w-full bg-white/10 rounded px-2 py-1 text-sm text-white focus:outline-none focus:ring-1 focus:ring-telegram-primary"
+                            className="w-full bg-black/20 rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-telegram-primary"
                             placeholder="Folder Name"
                             value={newFolderName}
                             onChange={e => setNewFolderName(e.target.value)}
                             onKeyDown={e => e.key === 'Enter' && submitCreate()}
-                            onBlur={() => !newFolderName && setShowNewFolderInput(false)}
                         />
+                        <label className="flex items-center gap-2 text-xs text-telegram-subtext cursor-pointer">
+                            <input 
+                                type="checkbox" 
+                                checked={isVault} 
+                                onChange={e => setIsVault(e.target.checked)} 
+                                className="rounded border-telegram-border bg-black/20 text-telegram-primary focus:ring-telegram-primary"
+                            />
+                            <span>Encrypted Vault</span>
+                        </label>
+                        {isVault && (
+                            <input
+                                type="password"
+                                className="w-full bg-black/20 rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-telegram-primary"
+                                placeholder="Vault Password"
+                                value={newFolderPassword}
+                                onChange={e => setNewFolderPassword(e.target.value)}
+                                onKeyDown={e => e.key === 'Enter' && submitCreate()}
+                            />
+                        )}
+                        <div className="flex gap-2 pt-1">
+                            <button 
+                                onClick={() => {
+                                    setShowNewFolderInput(false);
+                                    setNewFolderName("");
+                                    setNewFolderPassword("");
+                                    setIsVault(false);
+                                }}
+                                className="flex-1 px-2 py-1.5 text-xs text-red-400 hover:bg-red-400/10 rounded transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                onClick={submitCreate}
+                                className="flex-1 px-2 py-1.5 text-xs text-telegram-primary hover:bg-telegram-primary/10 rounded transition-colors font-medium"
+                            >
+                                Create
+                            </button>
+                        </div>
                     </div>
                 ) : (
                     <button
@@ -243,7 +358,7 @@ export function Sidebar({
 
                 <div className="flex gap-2">
                     <button
-                        onClick={onSync}
+                        onClick={() => onSync(false)}
                         disabled={isSyncing}
                         className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium text-blue-500 hover:text-blue-600 bg-blue-500/10 hover:bg-blue-500/20 rounded-lg transition-colors ${isSyncing ? 'opacity-50 cursor-not-allowed' : ''}`}
                         title="Scan for existing folders"

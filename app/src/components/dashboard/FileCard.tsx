@@ -1,9 +1,9 @@
-import { motion } from 'framer-motion';
-import { useState, useEffect } from 'react';
-import { Folder, Eye, Trash2 } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Folder, Eye, Trash2, MoreVertical, Download } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
 import { TelegramFile } from '../../types';
 import { FileTypeIcon } from '../FileTypeIcon';
+import { formatBytes } from '../../utils';
 
 interface FileCardProps {
     file: TelegramFile;
@@ -19,6 +19,7 @@ interface FileCardProps {
     activeFolderId?: number | null;
     height?: number;
     onToggleSelection?: () => void;
+    selectionMode?: boolean;
 }
 
 // Check if file is an image type that can have a thumbnail
@@ -27,33 +28,86 @@ function isImageFile(filename: string): boolean {
     return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(ext);
 }
 
-export function FileCard({ file, onDelete, onDownload, onPreview, isSelected, onClick, onContextMenu, onDrop, onDragStart, onDragEnd, activeFolderId, height, onToggleSelection }: FileCardProps) {
+export const FileCard = React.memo(function FileCard({
+    file, onDelete, onDownload, onPreview, isSelected, onClick,
+    onContextMenu, onDrop, onDragStart, onDragEnd, activeFolderId, height = 200,
+    onToggleSelection, selectionMode
+}: FileCardProps) {
     const isFolder = file.type === 'folder';
     const [isDragOver, setIsDragOver] = useState(false);
     const [thumbnail, setThumbnail] = useState<string | null>(null);
     const [thumbnailLoading, setThumbnailLoading] = useState(false);
 
+    // Disable HTML5 drag on touch devices to prevent conflict with long-press
+    const isTouch = typeof window !== 'undefined' && ('ontouchstart' in window || navigator.maxTouchPoints > 0);
+
+    // Long press logic — touch-based so it doesn't conflict with drag-and-drop
+    const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const touchStartPos = useRef<{ x: number; y: number } | null>(null);
+    const didLongPress = useRef(false);
+
+    const handleTouchStart = (e: React.TouchEvent) => {
+        const touch = e.touches[0];
+        touchStartPos.current = { x: touch.clientX, y: touch.clientY };
+        didLongPress.current = false;
+        longPressTimer.current = setTimeout(() => {
+            didLongPress.current = true;
+            if (onToggleSelection) onToggleSelection();
+            if (window.navigator.vibrate) window.navigator.vibrate(50);
+        }, 500);
+    };
+
+    const handleTouchMove = (e: React.TouchEvent) => {
+        if (!touchStartPos.current) return;
+        const touch = e.touches[0];
+        const dx = Math.abs(touch.clientX - touchStartPos.current.x);
+        const dy = Math.abs(touch.clientY - touchStartPos.current.y);
+        // If finger moves more than 10px it's a scroll/drag — cancel long press
+        if (dx > 10 || dy > 10) clearLongPress();
+    };
+
+    const handleTouchEnd = (e: React.TouchEvent) => {
+        clearLongPress();
+        // Suppress the click that follows a long press
+        if (didLongPress.current) {
+            e.preventDefault();
+            didLongPress.current = false;
+        }
+    };
+
+    const clearLongPress = () => {
+        if (longPressTimer.current) clearTimeout(longPressTimer.current);
+        longPressTimer.current = null;
+    };
+
     // Lazy load thumbnail for image files
+    // Lazy load thumbnail for image files with a debounce to prevent IPC spam on fast scroll
     useEffect(() => {
         if (isFolder || !isImageFile(file.name)) return;
 
         let cancelled = false;
-        setThumbnailLoading(true);
+        
+        const timer = setTimeout(() => {
+            if (cancelled) return;
+            setThumbnailLoading(true);
+            invoke<string>('cmd_get_thumbnail', {
+                messageId: file.id,
+                folderId: activeFolderId
+            }).then((result) => {
+                if (!cancelled && result) {
+                    setThumbnail(result);
+                }
+            }).catch(() => {
+                // Silently fail - will show icon instead
+            }).finally(() => {
+                if (!cancelled) setThumbnailLoading(false);
+            });
+        }, 300); // 300ms delay
 
-        invoke<string>('cmd_get_thumbnail', {
-            messageId: file.id,
-            folderId: activeFolderId
-        }).then((result) => {
-            if (!cancelled && result) {
-                setThumbnail(result);
-            }
-        }).catch(() => {
-            // Silently fail - will show icon instead
-        }).finally(() => {
-            if (!cancelled) setThumbnailLoading(false);
-        });
-
-        return () => { cancelled = true; };
+        return () => { 
+            cancelled = true; 
+            clearTimeout(timer);
+        };
     }, [file.id, file.name, activeFolderId, isFolder]);
 
     return (
@@ -61,6 +115,9 @@ export function FileCard({ file, onDelete, onDownload, onPreview, isSelected, on
             className="relative"
             onContextMenu={onContextMenu}
             onClick={onClick}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
             onDragOver={(e) => {
                 if (isFolder) {
                     e.preventDefault();
@@ -84,9 +141,8 @@ export function FileCard({ file, onDelete, onDownload, onPreview, isSelected, on
                 }
             }}
         >
-            <motion.div
-                layout
-                draggable={!isFolder}
+            <div
+                draggable={!isFolder && !isTouch}
                 onDragStart={(e: any) => {
                     if (onDragStart) onDragStart(file.id);
                     e.dataTransfer.setData("application/x-telegram-file-id", file.id.toString());
@@ -95,34 +151,59 @@ export function FileCard({ file, onDelete, onDownload, onPreview, isSelected, on
                 onDragEnd={() => {
                     if (onDragEnd) onDragEnd();
                 }}
-                whileHover={{ y: -4 }}
-                className={`group cursor-pointer bg-telegram-surface rounded-xl overflow-hidden border hover:shadow-[0_4px_20px_rgba(0,0,0,0.2)] transition-all relative
-                ${isSelected ? 'border-telegram-primary bg-telegram-primary/5 ring-1 ring-telegram-primary' : 'border-telegram-border hover:border-telegram-primary/50'}
+                className={`group cursor-pointer bg-white/5 rounded-xl overflow-hidden border hover:shadow-lg transition-all relative flex flex-col
+                ${isSelected ? 'border-telegram-primary bg-telegram-primary/10 ring-1 ring-telegram-primary' : 'border-telegram-border hover:border-white/20'}
                 ${isDragOver ? 'ring-2 ring-telegram-primary bg-telegram-primary/20 scale-105' : ''}`}
-                style={height ? { height: `${height}px` } : { aspectRatio: '4/3' }}
+                style={height ? { height: `${height}px` } : { aspectRatio: '4/4.5' }}
             >
-                {/* Thumbnail or Icon */}
-                {thumbnail ? (
-                    <div className="absolute inset-0">
+                {/* Thumbnail Area - 65% */}
+                <div className="relative h-[65%] w-full bg-black/20 flex-shrink-0">
+                    {thumbnail ? (
                         <img
                             src={thumbnail}
                             alt={file.name}
                             className="w-full h-full object-cover"
                         />
-                        {/* Gradient overlay for text readability */}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+                    ) : (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                            {isFolder ? (
+                                <Folder className="w-12 h-12 text-telegram-primary" />
+                            ) : thumbnailLoading && isImageFile(file.name) ? (
+                                <div className="w-8 h-8 border-2 border-telegram-primary/30 border-t-telegram-primary rounded-full animate-spin" />
+                            ) : (
+                                <FileTypeIcon filename={file.name} size="lg" className="w-12 h-12" />
+                            )}
+                        </div>
+                    )}
+                    
+                    {/* Top Right Actions (Menu) */}
+                    <div className="absolute top-2 right-2 flex gap-1 z-20">
+                        <button 
+                            onClick={(e) => { 
+                                e.stopPropagation(); 
+                                if (onContextMenu) onContextMenu(e); 
+                            }} 
+                            className="p-1.5 bg-black/60 rounded-full hover:bg-black/80 text-white/90 transition-colors"
+                        >
+                            <MoreVertical className="w-4 h-4" />
+                        </button>
                     </div>
-                ) : (
-                    <div className="absolute inset-0 flex items-center justify-center p-4">
-                        {isFolder ? (
-                            <Folder className="w-12 h-12 text-telegram-primary" />
-                        ) : thumbnailLoading && isImageFile(file.name) ? (
-                            <div className="w-8 h-8 border-2 border-telegram-primary/30 border-t-telegram-primary rounded-full animate-spin" />
-                        ) : (
-                            <FileTypeIcon filename={file.name} size="lg" />
+
+                    {/* Quick actions on hover (Desktop only) */}
+                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity hidden md:flex items-center justify-center gap-3 z-10">
+                        {onPreview && !isFolder && (
+                            <button onClick={(e) => { e.stopPropagation(); onPreview() }} className="p-2.5 bg-white/10 rounded-full hover:bg-telegram-primary text-white transition-colors" title="Preview">
+                                <Eye className="w-5 h-5" />
+                            </button>
                         )}
+                        <button onClick={(e) => { e.stopPropagation(); onDownload() }} className="p-2.5 bg-white/10 rounded-full hover:bg-green-500 text-white transition-colors" title="Download">
+                            <Download className="w-5 h-5" />
+                        </button>
+                        <button onClick={(e) => { e.stopPropagation(); onDelete() }} className="p-2.5 bg-white/10 rounded-full hover:bg-red-500 text-white transition-colors" title="Delete">
+                            <Trash2 className="w-5 h-5" />
+                        </button>
                     </div>
-                )}
+                </div>
 
                 {/* Selection Checkmark */}
                 <div
@@ -130,30 +211,28 @@ export function FileCard({ file, onDelete, onDownload, onPreview, isSelected, on
                         e.stopPropagation();
                         if (onToggleSelection) onToggleSelection();
                     }}
-                    className={`absolute top-2 left-2 w-5 h-5 rounded-full border flex items-center justify-center transition-all z-10 cursor-pointer ${isSelected ? 'bg-telegram-primary border-telegram-primary' : 'border-white/50 bg-black/30 opacity-0 group-hover:opacity-100'}`}
+                    className={`absolute top-2 left-2 w-5 h-5 rounded border flex items-center justify-center transition-all z-20 cursor-pointer 
+                    ${isSelected ? 'bg-telegram-primary border-telegram-primary' : (selectionMode ? 'border-white/50 bg-black/40 opacity-100' : 'border-white/50 bg-black/40 opacity-0 md:group-hover:opacity-100')}`}
                 >
-                    {isSelected && <div className="w-1.5 h-1.5 bg-black rounded-full" />}
+                    {isSelected && <div className="w-2 h-2 bg-white rounded-[1px]" />}
                 </div>
 
-                {/* File info overlay at bottom */}
-                <div className={`absolute bottom-0 left-0 right-0 p-3 ${thumbnail ? 'text-white' : 'text-telegram-text'}`}>
-                    <h3 className="text-sm font-medium truncate w-full" title={file.name}>{file.name}</h3>
-                    <p className={`text-xs mt-0.5 ${thumbnail ? 'text-white/70' : 'text-telegram-subtext'}`}>{file.sizeStr}</p>
+                {/* File info section - 35% */}
+                <div className="flex flex-col flex-1 p-3 bg-transparent justify-between">
+                    <h3 className="text-sm font-medium text-telegram-text line-clamp-2 leading-tight" title={file.name}>{file.name}</h3>
+                    <div className="flex items-center justify-between mt-1 text-[11px] text-telegram-subtext">
+                        <span>{file.sizeStr || formatBytes(file.size ?? 0)}</span>
+                        <span className="truncate ml-2">{file.created_at ? new Date(file.created_at).toLocaleDateString() : ''}</span>
+                    </div>
                 </div>
-
-                {/* Quick actions on hover */}
-                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 z-10">
-                    <button onClick={(e) => { e.stopPropagation(); if (onPreview) onPreview() }} className="file-action-btn p-1 bg-black/50 rounded-full hover:bg-telegram-primary hover:text-white text-white/70" title="Preview">
-                        <Eye className="w-3 h-3" />
-                    </button>
-                    <button onClick={(e) => { e.stopPropagation(); onDownload() }} className="file-action-btn p-1 bg-black/50 rounded-full hover:bg-green-500 hover:text-white text-white/70" title="Download">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                    </button>
-                    <button onClick={(e) => { e.stopPropagation(); onDelete() }} className="file-action-btn p-1 bg-black/50 rounded-full hover:bg-red-500 hover:text-white text-white/70" title="Delete">
-                        <Trash2 className="w-3 h-3" />
-                    </button>
-                </div>
-            </motion.div>
+            </div>
         </div>
     )
-}
+}, (prevProps, nextProps) => {
+    return prevProps.file.id === nextProps.file.id &&
+           prevProps.isSelected === nextProps.isSelected &&
+           prevProps.selectionMode === nextProps.selectionMode &&
+           prevProps.activeFolderId === nextProps.activeFolderId &&
+           prevProps.height === nextProps.height;
+});
+

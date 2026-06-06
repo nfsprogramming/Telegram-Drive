@@ -87,9 +87,6 @@ export function AuthWizard({ onLogin, isAddingAccount, onCancelAdd }: { onLogin:
                 if (savedId && savedHash) {
                     setApiId(savedId);
                     setApiHash(savedHash);
-                    if (isAddingAccount) {
-                        setStep("phone");
-                    }
                 }
             } catch {
                 // config not found, starting fresh

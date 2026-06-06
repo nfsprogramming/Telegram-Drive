@@ -2,7 +2,7 @@ export interface TelegramFile {
     id: number;
     name: string;
     size: number;
-    sizeStr: string; // Formatted size
+    sizeStr?: string; // Formatted size (optional, computed on frontend if missing)
     created_at?: string;
     type?: 'folder' | 'file'; // implied icon_type
     // Add other fields if backend sends them

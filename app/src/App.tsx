@@ -37,11 +37,11 @@ function AppContent() {
   }, []);
 
   if (isAuthenticated === null) {
-    return <div className="h-screen w-screen bg-telegram-bg flex items-center justify-center"><div className="w-8 h-8 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" /></div>;
+    return <div className="h-[100dvh] w-screen bg-telegram-bg flex items-center justify-center"><div className="w-8 h-8 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" /></div>;
   }
 
   return (
-    <main className="h-screen w-screen text-telegram-text overflow-hidden selection:bg-telegram-primary/30 relative">
+    <main className="h-[100dvh] w-screen text-telegram-text overflow-hidden selection:bg-telegram-primary/30 relative">
       <Toaster theme={theme} position="bottom-center" />
       {isAuthenticated && !isAddingAccount ? (
         <Dashboard onLogout={() => setIsAuthenticated(false)} onAddAccount={() => setIsAddingAccount(true)} />

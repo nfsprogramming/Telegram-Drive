@@ -4,9 +4,11 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { QueueItem } from '../types';
+import { TelegramFile, QueueItem } from '../types';
 import { useFileDrop } from './useFileDrop';
 import type { Store } from '@tauri-apps/plugin-store';
+import { stat } from '@tauri-apps/plugin-fs';
+import { runBackgroundIndexing } from '../services/indexer';
 
 interface ProgressPayload {
     id: string;
@@ -16,7 +18,7 @@ interface ProgressPayload {
     speed_bytes_per_sec: number;
 }
 
-export function useFileUpload(activeFolderId: number | null, store: Store | null) {
+export function useFileUpload(activeFolderId: number | null, store: Store | null, currentFiles: TelegramFile[] = []) {
     const queryClient = useQueryClient();
     const [uploadQueue, setUploadQueue] = useState<QueueItem[]>([]);
     const [processing, setProcessing] = useState(false);
@@ -72,12 +74,33 @@ export function useFileUpload(activeFolderId: number | null, store: Store | null
         setProcessing(true);
         setUploadQueue(q => q.map(i => i.id === item.id ? { ...i, status: 'uploading', progress: 0 } : i));
         try {
-            await invoke('cmd_upload_file', { path: item.path, folderId: item.folderId, transferId: item.id });
+            const messageId: number = await invoke('cmd_upload_file', { path: item.path, folderId: item.folderId, transferId: item.id });
             // Check if cancelled during upload
             if (cancelledRef.current.has(item.id)) {
                 cancelledRef.current.delete(item.id);
             } else {
                 setUploadQueue(q => q.map(i => i.id === item.id ? { ...i, status: 'success', progress: 100 } : i));
+                
+                // Trigger background indexing using the local file path!
+                const fileName = item.path.split(/[\\/]/).pop() || 'file';
+                // Try to guess mime type from extension
+                const ext = fileName.split('.').pop()?.toLowerCase();
+                let mimeType = 'application/octet-stream';
+                if (['jpg', 'jpeg', 'png', 'webp', 'bmp'].includes(ext || '')) mimeType = `image/${ext}`;
+                else if (ext === 'pdf') mimeType = 'application/pdf';
+                else if (['txt', 'md', 'csv', 'json'].includes(ext || '')) mimeType = `text/${ext}`;
+                
+                // We use the tauri:// protocol or convertFileSrc to read the local file in the webview
+                import('@tauri-apps/api/core').then(({ convertFileSrc }) => {
+                    const localUrl = convertFileSrc(item.path);
+                    runBackgroundIndexing({
+                        id: messageId,
+                        folder_id: item.folderId,
+                        name: fileName,
+                        mime_type: mimeType
+                    }, localUrl);
+                });
+                
                 queryClient.invalidateQueries({ queryKey: ['files'] });
             }
         } catch (e) {
@@ -102,17 +125,79 @@ export function useFileUpload(activeFolderId: number | null, store: Store | null
             const selected = await open({ multiple: true, directory: false });
             if (selected) {
                 const paths = Array.isArray(selected) ? selected : [selected];
-                const newItems: QueueItem[] = paths.map((path: string) => ({
-                    id: Math.random().toString(36).substr(2, 9),
-                    path,
-                    folderId: activeFolderId,
-                    status: 'pending'
-                }));
-                setUploadQueue(prev => [...prev, ...newItems]);
-                toast.info(`Queued ${paths.length} files for upload`);
+                const newItems: QueueItem[] = [];
+                
+                for (const path of paths) {
+                    try {
+                        const fileStat = await stat(path);
+                        const fileName = path.split(/[\\/]/).pop() || '';
+                        
+                        // Deduplication Check
+                        const isDuplicate = currentFiles.some(f => f.name === fileName && f.size === fileStat.size);
+                        if (isDuplicate) {
+                            toast.info(`Skipped "${fileName}" (Exact duplicate exists)`);
+                            continue;
+                        }
+                        
+                        newItems.push({
+                            id: Math.random().toString(36).substr(2, 9),
+                            path,
+                            folderId: activeFolderId,
+                            status: 'pending'
+                        });
+                    } catch (e) {
+                        toast.error(`Failed to read file ${path}: ${e}`);
+                    }
+                }
+                
+                if (newItems.length > 0) {
+                    setUploadQueue(prev => [...prev, ...newItems]);
+                    toast.info(`Queued ${newItems.length} files for upload`);
+                }
             }
         } catch {
             toast.error("Failed to open file dialog");
+        }
+    };
+
+    const handleManualFolderUpload = async () => {
+        try {
+            const selected = await open({ directory: true, multiple: false });
+            if (selected && typeof selected === 'string') {
+                toast.info("Scanning folder...");
+                const files: {uri: string, name: string, size: number}[] = await invoke('cmd_scan_folder', { uri: selected });
+                if (files.length === 0) {
+                    toast.error("Folder is empty or could not be read.");
+                    return;
+                }
+                
+                const newItems: QueueItem[] = [];
+                for (const f of files) {
+                    const fileName = f.name.split('/').pop() || f.name;
+                    const isDuplicate = currentFiles.some(cf => cf.name === fileName && cf.size === f.size);
+                    if (isDuplicate) {
+                        continue;
+                    }
+                    newItems.push({
+                        id: Math.random().toString(36).substr(2, 9),
+                        path: f.uri,
+                        folderId: activeFolderId,
+                        status: 'pending'
+                    });
+                }
+                
+                if (newItems.length > 0) {
+                    setUploadQueue(prev => [...prev, ...newItems]);
+                    toast.info(`Queued ${newItems.length} files from folder for upload`);
+                    if (newItems.length < files.length) {
+                        toast.info(`Skipped ${files.length - newItems.length} duplicates`);
+                    }
+                } else {
+                    toast.info("All files skipped (exact duplicates exist)");
+                }
+            }
+        } catch (e) {
+            toast.error(`Failed to scan folder: ${e}`);
         }
     };
 
@@ -160,6 +245,7 @@ export function useFileUpload(activeFolderId: number | null, store: Store | null
         uploadQueue,
         setUploadQueue,
         handleManualUpload,
+        handleManualFolderUpload,
         cancelAll,
         cancelItem,
         retryItem,

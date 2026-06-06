@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Eye, HardDrive, Trash2, FolderOpen, Pencil, Play, FileText } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Eye, HardDrive, Trash2, FolderOpen, Pencil, Play, FileText, Info, Copy } from 'lucide-react';
 import { TelegramFile } from '../../types';
 import { isMediaFile, isPdfFile } from '../../utils';
 
@@ -11,9 +12,12 @@ interface ContextMenuProps {
     onDownload: () => void;
     onDelete: () => void;
     onPreview: () => void;
+    onRename: () => void;
+    onDuplicate: () => void;
+    onDetails: () => void;
 }
 
-export function ContextMenu({ x, y, file, onClose, onDownload, onDelete, onPreview }: ContextMenuProps) {
+export function ContextMenu({ x, y, file, onClose, onDownload, onDelete, onPreview, onRename, onDuplicate, onDetails }: ContextMenuProps) {
     const [adjustedPos, setAdjustedPos] = useState({ x, y });
     const menuRef = useRef<HTMLDivElement>(null);
 
@@ -25,10 +29,10 @@ export function ContextMenu({ x, y, file, onClose, onDownload, onDelete, onPrevi
             let newY = y;
 
             if (x + rect.width > window.innerWidth) {
-                newX = x - rect.width;
+                newX = window.innerWidth - rect.width - 10;
             }
             if (y + rect.height > window.innerHeight) {
-                newY = y - rect.height;
+                newY = window.innerHeight - rect.height - 10;
             }
             setAdjustedPos({ x: newX, y: newY });
         }
@@ -50,10 +54,10 @@ export function ContextMenu({ x, y, file, onClose, onDownload, onDelete, onPrevi
         };
     }, [onClose]);
 
-    return (
+    return createPortal(
         <div
             ref={menuRef}
-            className="fixed z-50 min-w-[200px] bg-telegram-surface/95 backdrop-blur-xl border border-telegram-border rounded-lg shadow-2xl p-1.5 animate-in fade-in zoom-in-95 duration-100 flex flex-col gap-0.5"
+            className="fixed z-50 min-w-[200px] bg-telegram-surface/95 backdrop-blur-xl border border-telegram-border rounded-lg shadow-2xl p-1.5 animate-pop-in flex flex-col gap-0.5"
             style={{ left: adjustedPos.x, top: adjustedPos.y }}
             onClick={(e) => e.stopPropagation()}
             onContextMenu={(e) => e.preventDefault()}
@@ -95,9 +99,21 @@ export function ContextMenu({ x, y, file, onClose, onDownload, onDelete, onPrevi
                 Download
             </button>
 
-            <button disabled className="flex items-center gap-2 px-2 py-1.5 text-sm text-telegram-subtext hover:bg-telegram-hover rounded transition-colors text-left w-full cursor-not-allowed opacity-50">
-                <Pencil className="w-4 h-4" />
+            <div className="h-px bg-telegram-border my-1" />
+
+            <button onClick={onRename} className="flex items-center gap-2 px-2 py-1.5 text-sm text-telegram-text hover:bg-telegram-hover rounded transition-colors text-left w-full">
+                <Pencil className="w-4 h-4 text-orange-400" />
                 Rename
+            </button>
+
+            <button onClick={onDuplicate} className="flex items-center gap-2 px-2 py-1.5 text-sm text-telegram-text hover:bg-telegram-hover rounded transition-colors text-left w-full">
+                <Copy className="w-4 h-4 text-gray-400" />
+                Duplicate
+            </button>
+
+            <button onClick={onDetails} className="flex items-center gap-2 px-2 py-1.5 text-sm text-telegram-text hover:bg-telegram-hover rounded transition-colors text-left w-full">
+                <Info className="w-4 h-4 text-teal-400" />
+                Details
             </button>
 
             <div className="h-px bg-telegram-border my-1" />
@@ -106,6 +122,7 @@ export function ContextMenu({ x, y, file, onClose, onDownload, onDelete, onPrevi
                 <Trash2 className="w-4 h-4" />
                 Delete
             </button>
-        </div>
+        </div>,
+        document.body
     );
 }
