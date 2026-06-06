@@ -10,7 +10,7 @@
     <a href="https://github.com/nfsprogramming/Telegram-Drive/releases"><img src="https://img.shields.io/github/v/release/nfsprogramming/Telegram-Drive?style=flat-square&color=C62524" alt="Release" /></a>
     <a href="https://github.com/nfsprogramming/Telegram-Drive/stargazers"><img src="https://img.shields.io/github/stars/nfsprogramming/Telegram-Drive?style=flat-square&color=C62524" alt="Stars" /></a>
     <a href="https://github.com/nfsprogramming/Telegram-Drive/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="License" /></a>
-    <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-4caf50.svg?style=flat-square" alt="Platform" />
+    <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20Android%20%7C%20Linux-4caf50.svg?style=flat-square" alt="Platform" />
     <img src="https://img.shields.io/badge/Core-Rust-e5732c.svg?style=flat-square" alt="Rust" />
   </p>
 </div>
@@ -58,7 +58,11 @@ Telegram Drive does not rely on third-party backend servers. The entire architec
 *   **Media Streaming Engine:** Direct chunked-streaming of video and audio binaries. You can play a 4GB `.mkv` file instantly without waiting for the initial download sequence to finish.
 *   **Intelligent Deduplication:** Prevents uploading the same file twice by comparing file hashes locally before transmitting payloads to the network.
 *   **Resilient Connections:** Automatic retries for network drops, ensuring large multi-gigabyte uploads complete successfully even on unstable Wi-Fi.
-*   **Premium Glassmorphism UI:** Hardware-accelerated frosted glass interfaces with a specialized AMOLED Cyber Red theme.
+*   **Cross-Platform Architecture:** Available as a desktop application (Windows/Linux) and a native mobile application (Android APK) built from the exact same Rust core.
+*   **Encrypted Vaults:** Create password-protected encrypted folders (Vaults) that automatically lock themselves to secure your most sensitive files.
+*   **Deep Link Sharing:** Share files seamlessly across devices with native `tgdrive://` deep links.
+*   **Multi-Account Support:** Hot-swap between multiple Telegram accounts without needing to re-authenticate or clear caches.
+*   **Premium Glassmorphism UI:** Hardware-accelerated frosted glass interfaces with specialized dark and light themes.
 
 ---
 
@@ -68,9 +72,8 @@ We treat security as a first-class citizen. Telegram Drive is designed around a 
 
 *   **No Middleware Servers:** Your data never touches our servers. The application communicates directly between your local machine and Telegram's API endpoints.
 *   **Client-Side Execution:** All API keys, session tokens, and passwords are encrypted and stay on your local storage.
-*   **Private Channels:** Files are uploaded exclusively to private channels where you are the sole member. 
-
-*(Note: End-to-end AES-256 client-side file encryption before upload is currently in active development on the Roadmap).*
+*   **Encrypted Vaults:** Optional Vault folders encrypt your data locally with a password before it is ever uploaded, ensuring no one (not even Telegram) can read the contents without your vault password.
+*   **Private Channels:** Standard files are uploaded exclusively to private channels where you are the sole member.
 
 ---
 
@@ -136,9 +139,10 @@ To run Telegram Drive locally, you must provide your own Telegram Developer API 
 - [x] Initial MTProto integration and auth flow
 - [x] Virtual filesystem UI with drag-and-drop
 - [x] In-app media streaming (Video/Audio)
-- [x] Custom neon UI variables implementation
-- [ ] End-to-End Vault Encryption layer (AES-256)
-- [ ] Multi-account state management
+- [x] End-to-End Vault Encryption layer
+- [x] Multi-account state management
+- [x] Android Mobile Compilation
+- [x] Deep Link (tgdrive://) Support
 - [ ] Native OS file explorer integration (FUSE/WinFSP)
 - [ ] Offline file caching
 
